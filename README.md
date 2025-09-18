@@ -1,6 +1,6 @@
 # settings
 
-[![Run Tests](https://github.com/huythang304/settings/actions/workflows/tests.yml/badge.svg)](https://github.com/huythang304/settings/actions/workflows/tests.yml)
+[![Run Tests](https://github.com/huythang304/settings/actions/workflows/tests.yaml/badge.svg)](https://github.com/huythang304/settings/actions/workflows/tests.yaml)
 [![Code Style](https://github.com/huythang304/settings/actions/workflows/code-style.yml/badge.svg)](https://github.com/huythang304/settings/actions/workflows/code-style.yml)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
