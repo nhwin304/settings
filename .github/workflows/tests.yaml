@@ -4,41 +4,49 @@ name: Run Tests
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
-  tests:
+  test:
     runs-on: ubuntu-latest
-
     strategy:
+      fail-fast: true
       matrix:
-        php: [8.3]
+        php: [8.3] # Testa su più versioni di PHP
+        laravel: [12.*] # Specifica la versione di Laravel
+        stability: [prefer-stable]
+
+    name: P${{ matrix.php }} - L${{ matrix.laravel }} - ${{ matrix.stability }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v3
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
           extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, soap, intl, gd, exif, iconv
-          coverage: xdebug 
-          tools: composer:v2
+          coverage: xdebug # Abilita Xdebug per la code coverage
+
+      - name: Install Composer dependencies
+        run: |
+          composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:^10.0" --no-interaction --no-update
+          composer update --${{ matrix.stability }} --prefer-dist --no-interaction
 
       - name: Cache Composer
         uses: actions/cache@v4
         with:
           path: |
-            ~/.composer/cache/files
             vendor
-          key: composer-${{ runner.os }}-${{ matrix.php }}-${{ hashFiles('**/composer.lock') }}
+            ~/.composer/cache
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
           restore-keys: |
-            composer-${{ runner.os }}-${{ matrix.php }}-
+            ${{ runner.os }}-composer-
 
-      - name: Install dependencies
-        run: composer install --prefer-dist --no-interaction --no-progress
-
-      - name: Run Pest
-        run: vendor/bin/pest
+      - name: Run tests
+        env:
+          XDEBUG_MODE: coverage
+        run: vendor/bin/pest --coverage # Esegui i test e genera il report di coverage
