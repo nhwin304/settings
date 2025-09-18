@@ -127,7 +127,7 @@ class Setting
                 ],
             ],
             ['group', 'key'], // unique by
-            ['settings', 'updated_at'] // columns to update on duplicate
+            ['value', 'updated_at'] // columns to update on duplicate
         );
     }
 

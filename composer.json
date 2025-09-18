@@ -36,6 +36,11 @@
             "Huythang304\\Settings\\": "src/"
         }
     },
+    "autoload-dev": {
+        "psr-4": {
+            "Huythang304\\Settings\\Tests\\": "tests/"
+        }
+    },
     "scripts": {
         "pint": "vendor/bin/pint"
     },
