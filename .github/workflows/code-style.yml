@@ -1,0 +1,44 @@
+name: Code Style (Pint)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  pint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.3
+          tools: composer:v2
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.composer/cache/files
+            vendor
+          key: composer-${{ runner.os }}-8.2-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-8.2-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Run Pint
+        run: ./vendor/bin/pint
+
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: Apply style changes
+          file_pattern: '*.php'
