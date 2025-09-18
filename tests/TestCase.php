@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests;
+namespace Huythang304\Settings\Tests;
 
 use Orchestra\Testbench\TestCase as Orchestra;
 
