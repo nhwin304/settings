@@ -24,7 +24,7 @@
         </exclude>
     </source>
 
-    <!-- Khai báo coverage để tránh warning khi dùng --coverage -->
+    <!-- Khai báo coverage để tránh warning khi dùng -coverage -->
     <coverage cacheDirectory=".phpunit.cache/code-coverage">
         <include>
             <directory suffix=".php">src</directory>
