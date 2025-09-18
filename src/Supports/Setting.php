@@ -126,8 +126,8 @@ class Setting
                     'updated_at' => now(),
                 ],
             ],
-            ['group', 'key'], // unique by
-            ['value', 'updated_at'] // columns to update on duplicate
+            ['group', 'key'],
+            ['value', 'updated_at']
         );
     }
 
