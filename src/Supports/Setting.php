@@ -57,7 +57,6 @@ class Setting
     {
         $tableName = config('settings.table_name', 'settings');
 
-        // Un'unica query con aggregazione
         $timestamp = DB::table($tableName)
             ->where('group', $group)
             ->max('updated_at');
