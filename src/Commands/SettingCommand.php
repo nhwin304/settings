@@ -21,7 +21,7 @@ class SettingCommand extends Command
      *
      * @var string
      */
-    protected $description = public $description = 'Create a new Filament settings Page class and its Blade view. '
+    protected $description = 'Create a new Filament settings Page class and its Blade view. '
         . 'Usage: php artisan make:settings [name?] [panel?] — generates '
         . 'app/Filament/{Panel}/Pages/{Name}Settings.php and '
         . 'resources/views/filament/settings/{name}.blade.php. '
