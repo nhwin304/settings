@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Huythang304\Settings\Supports;
+namespace Nhwin304\Settings\Supports;
 
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -53,7 +53,7 @@ class Setting
         return $settings;
     }
 
-    public static function getGroupLastUpdatedAt(string $group, string $format = 'F j, Y, g:i a', string $timezone = 'UTC'): ?string
+    public static function getGroupLastUpdatedAt(string $group, string $format = 'H:i:s d/m/Y', ?string $timezone = null): ?string
     {
         $tableName = config('settings.table_name', 'settings');
 
@@ -67,6 +67,10 @@ class Setting
 
         try {
             $fromTz = config('app.timezone', 'UTC');
+            
+            // If no timezone is provided, use app.timezone from config
+            $timezone = $timezone ?? config('app.timezone', 'UTC');
+            
             $dt = $timestamp instanceof Carbon
                 ? $timestamp
                 : Carbon::parse($timestamp, $fromTz);

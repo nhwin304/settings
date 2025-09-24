@@ -1,6 +1,6 @@
 <?php
 
-// config for Inerba/DbConfig
+// config for Nhwin304/Settings
 return [
 
     /*

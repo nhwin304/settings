@@ -1,5 +1,5 @@
 {
-    "name": "huythang304/settings",
+    "name": "nhwin304/settings",
     "description": "A Filament plugin for database-backed application settings and editable content, with caching and easy page generation.",
      "keywords": [
         "filament",
@@ -8,7 +8,7 @@
         "laravel"
     ],
     "type": "filament",
-    "homepage": "https://github.com/huythang304/settings",
+    "homepage": "https://github.com/nhwin304/settings",
     "license": "MIT",
     "authors": [
         {
@@ -33,12 +33,12 @@
             "src/Helpers/helpers.php"
         ],
         "psr-4": {
-            "Huythang304\\Settings\\": "src/"
+            "Nhwin304\\Settings\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Huythang304\\Settings\\Tests\\": "tests/"
+            "Nhwin304\\Settings\\Tests\\": "tests/"
         }
     },
     "scripts": {
