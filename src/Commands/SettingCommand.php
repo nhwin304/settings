@@ -2,61 +2,86 @@
 
 namespace Nhwin304\Settings\Commands;
 
+use Filament\Facades\Filament;                         // UPDATED: import Filament
+use Illuminate\Console\Attributes\AsCommand;           // UPDATED: import attribute
 use Illuminate\Console\Command;
+use Illuminate\Filesystem\Filesystem;                  // UPDATED: import Filesystem
+use Illuminate\Support\Pluralizer;                     // UPDATED: import Pluralizer
+use Illuminate\Support\Str;                            // UPDATED: import Str
+use function Laravel\Prompts\suggest;                  // UPDATED: import prompt helper
+use function Laravel\Prompts\text;                     // UPDATED: import prompt helper
 
-#[AsCommand(name: 'make:settings', aliases: [
-    'settings',
-])]
+#[AsCommand(
+    name: 'make:settings',
+    aliases: ['settings']
+)]
+/**
+ * Tạo nhanh **Filament Settings Page** + **Blade view** từ stub.
+ *
+ * ## Mô tả
+ * Lệnh sẽ sinh:
+ * - Page class: `app/Filament/{Panel?}/Pages/{Name}Settings.php`
+ * - View: `resources/views/filament/pages/{name-kebab}-settings.blade.php`
+ *
+ * ## Cách dùng
+ * - Tương tác (khuyến nghị):
+ *   `php artisan make:settings`
+ *   → nhập *Name* (vd: Site, General, Mail) và chọn *Panel* (nếu có nhiều panel).
+ *
+ * - Truyền tham số trực tiếp:
+ *   `php artisan make:settings General admin`
+ *   → tạo `app/Filament/Admin/Pages/GeneralSettings.php`
+ *   và `resources/views/filament/pages/general-settings.blade.php`.
+ *
+ * - Không ghi đè file đã tồn tại. Sử dụng lại stub tại `stubs/page.stub` & `stubs/view.stub`.
+ *
+ * ## Tham số
+ * - `{name?}`  : Tên settings (không cần kèm 'Settings', lệnh sẽ tự bỏ hậu tố).
+ * - `{panel?}` : Tên panel Filament (vd: `admin`). Bỏ trống = panel mặc định.
+ *
+ * ## Notes
+ * - Hỗ trợ `--no-interaction` (CI). Khi đó **name** là bắt buộc.
+ * - Panel list lấy từ `Filament::getPanels()`.
+ */
 class SettingCommand extends Command
 {
     /**
-     * The name and signature of the console command.
+     * Tên & chữ ký console command.
+     *
+     * Ví dụ: `php artisan make:settings {name?} {panel?}`
      *
      * @var string
      */
     protected $signature = 'make:settings {name?} {panel?}';
 
     /**
-     * The console command description.
+     * Mô tả ngắn gọn hiển thị trong `php artisan list`.
      *
      * @var string
      */
-    protected $description = 'Create a new Filament settings Page class and its Blade view. '
-        . 'Usage: php artisan make:settings [name?] [panel?] — generates '
-        . 'app/Filament/{Panel}/Pages/{Name}Settings.php and '
-        . 'resources/views/filament/settings/{name}.blade.php. '
-        . 'If arguments are not provided, you will be prompted interactively. '
-        . 'Existing files will not be overwritten.';
+    protected $description = 'Create a Filament Settings Page class and its Blade view from stubs.';
 
     /**
+     * Alias bổ sung (ngoài AsCommand aliases).
+     *
      * @var array<string>
      */
-    protected $aliases = [
-        'settings',
-    ];
+    protected $aliases = ['settings'];
 
-    /**
-     * Filesystem instance
-     */
+    /** Filesystem instance */
     protected Filesystem $files;
 
-    /**
-     * Cached name argument
-     */
+    /** Cached name argument */
     protected ?string $cachedName = null;
 
-    /**
-     * Cached panel argument
-     */
+    /** Cached panel argument */
     protected ?string $cachedPanel = null;
 
-    /**
-     * Whether panel argument has been cached
-     */
+    /** Whether panel argument has been cached */
     protected bool $panelCached = false;
 
     /**
-     * Create a new command instance.
+     * Inject Filesystem qua container.
      */
     public function __construct(Filesystem $files)
     {
@@ -66,38 +91,49 @@ class SettingCommand extends Command
     }
 
     /**
-     * Execute the console command.
+     * Thực thi lệnh.
+     *
+     * - Hỏi/đọc tham số `name`, `panel`
+     * - Sinh nội dung từ `page.stub`
+     * - Tạo view từ `view.stub`
+     * - Ghi file nếu chưa tồn tại
+     *
+     * @return int 0 (SUCCESS) | 1 (FAILURE)
      */
-    public function handle()
+    public function handle(): int
     {
-        $name = $this->getNameArgument();
+        $name  = $this->getNameArgument();
         $panel = $this->getPanelArgument();
 
         $path = $this->getSourceFilePath();
 
-        $this->makeDirectory(dirname($path));
+        $this->makeDirectory(\dirname($path));
 
         $contents = $this->getSourceFile();
 
-        $this->createViewFromStub('filament.pages.' . Str::of($name)->headline()->lower()->slug() . '-settings');
+        $this->createViewFromStub(
+            'filament.pages.' . Str::of($name)->headline()->lower()->slug() . '-settings'
+        );
 
         if ($contents === false) {
             $this->warn("Could not build source file contents for {$path}");
 
-            return;
+            return self::FAILURE; // UPDATED
         }
 
         if (! $this->files->exists($path)) {
             $this->files->put($path, $contents);
             $this->info("File : {$path} created");
         } else {
-            $this->warn("File : {$path} already exits");
+            $this->warn("File : {$path} already exists"); // UPDATED: fix typo
         }
 
+        return self::SUCCESS; // UPDATED
     }
 
     /**
-     * Get the name argument interactively if not provided
+     * Lấy tham số `name`. Nếu không có, hỏi tương tác (trừ khi --no-interaction).
+     * - Bỏ hậu tố "settings" (không phân biệt hoa/thường).
      */
     protected function getNameArgument(): string
     {
@@ -110,7 +146,8 @@ class SettingCommand extends Command
         if (! $name) {
             if ($this->option('no-interaction')) {
                 $this->error('The name argument is required when using --no-interaction flag.');
-                exit(1);
+
+                return self::FAILURE; // hoặc throw; nhưng giữ nguyên flow hiện tại nếu bạn muốn
             }
 
             $name = text(
@@ -121,16 +158,15 @@ class SettingCommand extends Command
             );
         }
 
-        // Remove trailing "settings" suffix (case-insensitive) and trim whitespace
-        $name = (string) Str::of($name)
-            ->replaceMatches('/settings$/i', '')
-            ->trim();
+        // Remove trailing "settings" suffix (case-insensitive) and trim
+        $name = (string) Str::of($name)->replaceMatches('/settings$/i', '')->trim();
 
         return $this->cachedName = $name;
     }
 
     /**
-     * Get the panel argument interactively if not provided
+     * Lấy tham số `panel`. Nếu không có, gợi ý chọn từ danh sách panel khả dụng.
+     * Trả về null nếu chỉ có 1 panel.
      */
     protected function getPanelArgument(): ?string
     {
@@ -143,7 +179,7 @@ class SettingCommand extends Command
         if (! $panel && ! $this->option('no-interaction')) {
             $availablePanels = $this->getAvailablePanels();
 
-            if (count($availablePanels) < 2) {
+            if (\count($availablePanels) < 2) {
                 $this->panelCached = true;
 
                 return $this->cachedPanel = null;
@@ -154,12 +190,7 @@ class SettingCommand extends Command
                 options: $availablePanels,
                 placeholder: 'Leave empty for default panel',
                 hint: 'This will determine the directory structure for your settings page.'
-            );
-
-            // If user pressed enter without selecting anything, return null
-            if (empty($panel)) {
-                $panel = null;
-            }
+            ) ?: null;
         }
 
         $this->panelCached = true;
@@ -168,60 +199,46 @@ class SettingCommand extends Command
     }
 
     /**
-     * Get available Filament panels from the app/Filament directory
+     * Lấy danh sách panel từ Filament (key là panel name).
      *
-     * @return array<int,string> List of available panel names
+     * @return array<int, string>
      */
     protected function getAvailablePanels(): array
     {
-        $panels = Filament::getPanels();
-
-        return array_keys($panels);
+        $panels = Filament::getPanels(); // ['admin' => PanelInstance, ...]
+        return \array_keys($panels);
     }
 
     /**
-     * Create a new view file from the stub.
-     *
-     * @param  string  $viewName  The name of the view.
+     * Sinh view từ `stubs/view.stub` đến `resources/views/{viewName}.blade.php`.
      */
     public function createViewFromStub(string $viewName): void
     {
-        // Define the path to the view stub.
         $viewStubPath = __DIR__ . '/../../stubs/view.stub';
-
-        // Define the path to the new view file.
-        $newViewPath = \resource_path('views/' . str_replace('.', '/', $viewName) . '.blade.php');
+        $newViewPath  = \resource_path('views/' . \str_replace('.', '/', $viewName) . '.blade.php');
 
         if ($this->files->exists($newViewPath)) {
             $this->warn("File : {$newViewPath} already exists");
-
             return;
         }
 
-        // Read the contents of the view stub.
-        $viewStubContents = file_get_contents($viewStubPath);
+        $viewStubContents = \file_get_contents($viewStubPath);
 
         if ($viewStubContents === false) {
             $this->warn("Unable to read view stub at {$viewStubPath}");
-
             return;
         }
 
-        // Replace any variables in the stub contents.
-        // In this example, we're replacing a variable named 'VIEW_NAME'.
-        $viewContents = str_replace('$VIEW_NAME$', $viewName, $viewStubContents);
+        $viewContents = \str_replace('$VIEW_NAME$', $viewName, $viewStubContents);
 
-        // Create the directory for the new view file, if it doesn't already exist.
-        $this->makeDirectory(dirname($newViewPath));
-
-        // Write the view contents to the new view file using the Filesystem API.
+        $this->makeDirectory(\dirname($newViewPath));
         $this->files->put($newViewPath, $viewContents);
 
         $this->info("View file : {$newViewPath} created");
     }
 
     /**
-     * Return the stub file path
+     * Đường dẫn file stub Page.
      */
     public function getStubPath(): string
     {
@@ -229,89 +246,89 @@ class SettingCommand extends Command
     }
 
     /**
-     * Map the stub variables present in stub to its value
+     * Biến thay thế trong stub.
      *
-     * @return array<string,string>
+     * @return array{TITLE:string,PANEL:string,CLASS_NAME:string,SETTING_NAME:string}
      */
     public function getStubVariables(): array
     {
-        $name = $this->getNameArgument();
+        $name  = $this->getNameArgument();
         $panel = $this->getPanelArgument();
 
         $singularClassName = $this->getSingularClassName($name);
 
         return [
-            'TITLE' => Str::headline($singularClassName),
-            'PANEL' => $panel ? ucfirst($panel) . '\\' : '',
-            'CLASS_NAME' => $singularClassName,
+            'TITLE'        => Str::headline($singularClassName),
+            'PANEL'        => $panel ? \ucfirst($panel) . '\\' : '',
+            'CLASS_NAME'   => $singularClassName,
             'SETTING_NAME' => Str::of($name)->headline()->lower()->slug(),
         ];
     }
 
     /**
-     * Get the stub path and the stub variables
+     * Build nội dung file class từ stub + biến.
      *
-     * @return string|false The generated source contents or false on failure
+     * @return string|false
      */
-    public function getSourceFile(): string | false
+    public function getSourceFile(): string|false
     {
         return $this->getStubContents($this->getStubPath(), $this->getStubVariables());
     }
 
     /**
-     * Replace the stub variables(key) with the desire value
+     * Thay thế các `$KEY$` trong stub bằng giá trị tương ứng.
      *
      * @param  array<string,string>  $stubVariables
+     * @return string|false
      */
-    public function getStubContents(string $stub, array $stubVariables = []): string | false
+    public function getStubContents(string $stub, array $stubVariables = []): string|false
     {
-        $contents = file_get_contents($stub);
+        $contents = \file_get_contents($stub);
 
         if ($contents === false) {
             return false;
         }
 
         foreach ($stubVariables as $search => $replace) {
-            $contents = str_replace('$' . $search . '$', $replace, $contents);
+            $contents = \str_replace('$' . $search . '$', $replace, $contents);
         }
 
         return $contents;
     }
 
     /**
-     * Get the full path of the generated class.
+     * Đường dẫn file class đích.
      */
     public function getSourceFilePath(): string
     {
-        $name = $this->getNameArgument();
+        $name  = $this->getNameArgument();
         $panel = $this->getPanelArgument();
 
-        $panelPrefix = $panel ? ucfirst($panel) . '\\' : '';
+        $panelPrefix = $panel ? \ucfirst($panel) . '\\' : '';
 
         $path = \base_path('app\\Filament\\' . $panelPrefix . 'Pages') . '\\' . $this->getSingularClassName($name) . 'Settings.php';
 
-        return str_replace('\\', '/', $path);
+        return \str_replace('\\', '/', $path);
     }
 
     /**
-     * Return the Singular Capitalize Name
+     * Chuyển tên sang dạng singular, viết hoa từng từ,
+     * ví dụ: "emails" -> "Email", "user settings" -> "User settings" (sau singular).
      */
     public function getSingularClassName(string $name): string
     {
-        return ucwords(Pluralizer::singular($name));
+        return \ucwords(Pluralizer::singular($name));
     }
 
     /**
-     * Build the directory for the class if necessary.
+     * Tạo thư mục đích nếu chưa tồn tại.
      */
     protected function makeDirectory(string $path): string
     {
-
         if (! $this->files->isDirectory($path)) {
             $this->files->makeDirectory($path, 0777, true, true);
         }
 
         return $path;
     }
-
 }
