@@ -44,7 +44,7 @@ class Setting
     {
         $settings = [];
 
-        $tableName = config('settings.table_name', 'settings');
+        $tableName = config('settings.table_name', 'Settings');
 
         DB::table($tableName)->where('group', $group)->get()->each(function (\stdClass $setting) use (&$settings) {
             $settings[$setting->key] = json_decode($setting->value, true);
