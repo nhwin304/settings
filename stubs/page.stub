@@ -43,13 +43,7 @@ class $CLASS_NAME$Settings extends AbstractPageSettings
     {
         return $schema
             ->components([
-                // You can delete these statements!
-                Components\Text::make(new \Illuminate\Support\HtmlString(
-                    \Illuminate\Support\Facades\View::make('db-config::filament.pages.settings-help', [
-                        'group' => $this->settingName(),
-                        'pageClass' => class_basename(self::class),
-                    ])->render()
-                )),
+                //
             ])
             ->statePath('data');
     }
