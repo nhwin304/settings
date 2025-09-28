@@ -50,6 +50,16 @@
             "pestphp/pest-plugin": true
         }
     },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Nhwin\\Settings\\Providers\\SettingServiceProvider"
+            ],
+            "aliases": {
+                "Settings": "Nhwin\\Settings\\Facades\\Setting"
+            }
+        }
+    },
     "minimum-stability": "dev",
     "prefer-stable": true
 }
