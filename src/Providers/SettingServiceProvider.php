@@ -1,11 +1,11 @@
 <?php
 
-namespace Nhwin304\Settings\Providers;
+namespace Nhwin\Settings\Providers;
 
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Blade;
-use Nhwin304\Settings\Commands\SettingCommand;
-use Nhwin304\Settings\Testing\TestsDbConfig;
+use Nhwin\Settings\Commands\SettingCommand;
+use Nhwin\Settings\Testing\TestsDbConfig;
 use Livewire\Features\SupportTesting\Testable;
 use Spatie\LaravelPackageTools\Commands\InstallCommand;
 use Spatie\LaravelPackageTools\Package;
@@ -69,13 +69,13 @@ class SettingServiceProvider extends PackageServiceProvider
 
         // Set the Blade directive to retrieve the settings
         Blade::directive('settings', function ($expression) {
-            return "<?php echo \Nhwin304\Settings\Supports\Setting::get($expression); ?>";
+            return "<?php echo \Nhwin\Settings\Supports\Setting::get($expression); ?>";
         });
     }
 
     protected function getAssetPackageName(): ?string
     {
-        return 'nhwin304/settings';
+        return 'nhwin/settings';
     }
 
     /**

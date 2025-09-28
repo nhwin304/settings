@@ -1,6 +1,6 @@
 <?php
 
-// config for Nhwin304/Settings
+// config for Nhwin/Settings
 return [
 
     /*

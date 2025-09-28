@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Nhwin304\Settings\Supports;
+namespace Nhwin\Settings\Supports;
 
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;

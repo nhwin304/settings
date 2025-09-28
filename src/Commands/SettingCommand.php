@@ -1,6 +1,6 @@
 <?php
 
-namespace Nhwin304\Settings\Commands;
+namespace Nhwin\Settings\Commands;
 
 use Filament\Facades\Filament;                         // UPDATED: import Filament
 use Illuminate\Console\Attributes\AsCommand;           // UPDATED: import attribute

@@ -1,6 +1,6 @@
 <?php
 
-namespace Nhwin304\Settings\Filament\Plugins;
+namespace Nhwin\Settings\Filament\Plugins;
 
 use Filament\Contracts\Plugin;
 use Filament\Panel;

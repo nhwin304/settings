@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Nhwin304\Settings\Facades\Setting as SettingFacade;
+use Nhwin\Settings\Facades\Setting as SettingFacade;
 
 if (! function_exists('settings')) {
     

@@ -3,7 +3,7 @@
 namespace App\Filament\$PANEL$Pages;
 
 use BackedEnum;
-use Nhwin304\Settings\AbstractPageSettings;
+use Nhwin\Settings\AbstractPageSettings;
 use Filament\Schemas\Components;
 use Filament\Schemas\Schema;
 

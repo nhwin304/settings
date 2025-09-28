@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Nhwin304\Settings\Abstracts;
+namespace Nhwin\Settings\Abstracts;
 
 use BackedEnum;
 use Filament\Actions\Action;

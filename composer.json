@@ -1,5 +1,5 @@
 {
-    "name": "nhwin304/settings",
+    "name": "nhwin/settings",
     "description": "A Filament plugin for database-backed application settings and editable content, with caching and easy page generation.",
      "keywords": [
         "filament",
@@ -33,12 +33,12 @@
             "src/Helpers/helpers.php"
         ],
         "psr-4": {
-            "Nhwin304\\Settings\\": "src/"
+            "Nhwin\\Settings\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Nhwin304\\Settings\\Tests\\": "tests/"
+            "Nhwin\\Settings\\Tests\\": "tests/"
         }
     },
     "scripts": {
