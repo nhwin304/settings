@@ -33,7 +33,6 @@ class SettingServiceProvider extends PackageServiceProvider
 	        ->hasInstallCommand(function (InstallCommand $command) {
 	            $command
 	                ->publishConfigFile()
-	                ->publishTranslations()
 	                ->publishMigrations()
 	                ->askToRunMigrations()
 	                ->askToStarRepoOnGitHub('nhwin304/settings');
