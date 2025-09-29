@@ -24,7 +24,8 @@ class SettingServiceProvider extends PackageServiceProvider
          *
          * More info: https://github.com/spatie/laravel-package-tools
          */
-        $package->name(static::$name)
+        $package
+            ->name(static::$name)
             ->hasConfigFile()
 	        ->hasMigrations($this->getMigrations())
 	        ->hasTranslations()
@@ -37,20 +38,6 @@ class SettingServiceProvider extends PackageServiceProvider
 	                ->askToRunMigrations()
 	                ->askToStarRepoOnGitHub('nhwin304/settings');
 	        });
-
-        $configFileName = $package->shortName();
-
-        if (file_exists($package->basePath("/../config/{$configFileName}.php"))) {
-            $package->hasConfigFile();
-        }
-
-        if (file_exists($package->basePath('/../database/migrations'))) {
-            $package->hasMigrations($this->getMigrations());
-        }
-
-        if (file_exists($package->basePath('/../resources/lang'))) {
-            $package->hasTranslations();
-        }
 
     }
 

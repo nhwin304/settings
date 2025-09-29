@@ -56,7 +56,7 @@
                 "Nhwin\\Settings\\Providers\\SettingServiceProvider"
             ],
             "aliases": {
-                "Settings": "Nhwin\\Settings\\Facades\\Setting"
+                "Setting": "Nhwin\\Settings\\Facades\\Setting"
             }
         }
     },
