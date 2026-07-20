@@ -9,6 +9,7 @@ use Nhwin\Settings\Contracts\ScopeResolver;
 use Nhwin\Settings\Contracts\SettingsManagerContract;
 use Nhwin\Settings\Contracts\SettingsRepository;
 use Nhwin\Settings\Definitions\DefinitionRegistry;
+use Nhwin\Settings\Definitions\SettingsDefinition;
 use Nhwin\Settings\Repositories\DatabaseSettingsRepository;
 use Nhwin\Settings\Services\SettingsManager;
 use Nhwin\Settings\Support\SettingsCache;
@@ -50,7 +51,7 @@ class SettingServiceProvider extends PackageServiceProvider
     {
         $this->app->singleton(DefinitionRegistry::class, function ($app): DefinitionRegistry {
             $definitions = array_map(
-                fn (string $definition): \Nhwin\Settings\Definitions\SettingsDefinition => $app->make($definition),
+                fn (string $definition): SettingsDefinition => $app->make($definition),
                 $app['config']->get('settings.definitions', []),
             );
 

@@ -1,5 +1,6 @@
 <?php
 
+use App\Filament\SuperAdmin\Pages\GeneralSettings;
 use Illuminate\Support\Facades\Blade;
 use Nhwin\Settings\Abstracts\AbstractPageSettings;
 use Nhwin\Settings\Facades\Setting;
@@ -37,7 +38,7 @@ it('generates a page with valid namespaces that can be loaded', function (): voi
     require_once $path;
 
     expect(is_subclass_of(
-        App\Filament\SuperAdmin\Pages\GeneralSettings::class,
+        GeneralSettings::class,
         AbstractPageSettings::class,
     ))->toBeTrue();
 });

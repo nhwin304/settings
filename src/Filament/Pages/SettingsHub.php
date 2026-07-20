@@ -7,6 +7,7 @@ namespace Nhwin\Settings\Filament\Pages;
 use BackedEnum;
 use Filament\Pages\Page;
 use Nhwin\Settings\Filament\Plugins\SettingsPlugin;
+use Nhwin\Settings\Filament\SettingsPageDefinition;
 use UnitEnum;
 
 class SettingsHub extends Page
@@ -24,7 +25,7 @@ class SettingsHub extends Page
         return SettingsPlugin::get()->isAccessible();
     }
 
-    /** @return list<\Nhwin\Settings\Filament\SettingsPageDefinition> */
+    /** @return list<SettingsPageDefinition> */
     public function getSettingsPages(): array
     {
         return SettingsPlugin::get()->registry()->accessible();

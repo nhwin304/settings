@@ -3,6 +3,7 @@
 namespace Nhwin\Settings\Tests;
 
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Schema;
 use Nhwin\Settings\Providers\SettingServiceProvider;
 use Orchestra\Testbench\TestCase as Orchestra;
@@ -25,7 +26,7 @@ abstract class TestCase extends Orchestra
     }
 
     /**
-     * @param  \Illuminate\Foundation\Application  $app
+     * @param  Application  $app
      * @return array<class-string>
      */
     protected function getPackageProviders($app): array
@@ -33,7 +34,7 @@ abstract class TestCase extends Orchestra
         return [SettingServiceProvider::class];
     }
 
-    /** @param \Illuminate\Foundation\Application $app */
+    /** @param Application $app */
     protected function defineEnvironment($app): void
     {
         $app['config']->set('database.default', 'testing');

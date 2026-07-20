@@ -1,9 +1,11 @@
 <?php
 
+use Nhwin\Settings\Support\DefaultScopeResolver;
+
 // config for Nhwin/Settings
 return [
 
-    'scope_resolver' => Nhwin\Settings\Support\DefaultScopeResolver::class,
+    'scope_resolver' => DefaultScopeResolver::class,
 
     /*
     |--------------------------------------------------------------------------

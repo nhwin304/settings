@@ -7,6 +7,7 @@ namespace Nhwin\Settings\Repositories;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Database\DatabaseManager;
+use Illuminate\Database\Query\Builder;
 use JsonException;
 use Nhwin\Settings\Contracts\SettingsRepository;
 use RuntimeException;
@@ -75,7 +76,7 @@ final class DatabaseSettingsRepository implements SettingsRepository
         return $timestamp ? Carbon::parse($timestamp, config('app.timezone', 'UTC')) : null;
     }
 
-    private function query(string $scope, string $group): \Illuminate\Database\Query\Builder
+    private function query(string $scope, string $group): Builder
     {
         return $this->database->table($this->table())
             ->where('scope', $scope)

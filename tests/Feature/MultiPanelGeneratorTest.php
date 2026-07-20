@@ -1,5 +1,7 @@
 <?php
 
+use App\Filament\Admin\Pages\PresetGeneralSettings;
+use App\Settings\PresetGeneralSettingsDefinition;
 use Illuminate\Support\Str;
 
 it('normalizes panel IDs into valid paths and namespaces', function (string $panel, string $namespace): void {
@@ -52,6 +54,6 @@ it('generates preset fields typed definitions and hub metadata', function (): vo
     require_once $page;
     require_once $definition;
 
-    expect(class_exists(App\Filament\Admin\Pages\PresetGeneralSettings::class))->toBeTrue()
-        ->and(class_exists(App\Settings\PresetGeneralSettingsDefinition::class))->toBeTrue();
+    expect(class_exists(PresetGeneralSettings::class))->toBeTrue()
+        ->and(class_exists(PresetGeneralSettingsDefinition::class))->toBeTrue();
 });

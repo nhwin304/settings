@@ -62,7 +62,8 @@ jobs:
         run: |
           composer require --no-interaction --no-update "laravel/framework:${{ matrix.laravel }}" "filament/filament:${{ matrix.filament }}"
           composer require --dev --no-interaction --no-update "livewire/livewire:${{ matrix.livewire }}" "orchestra/testbench:${{ matrix.testbench }}"
-          composer update --with-all-dependencies --prefer-dist --no-interaction --no-progress
+          composer update laravel/framework filament/filament livewire/livewire orchestra/testbench \
+            --with-all-dependencies --prefer-dist --no-interaction --no-progress
 
       - name: Validate Composer metadata
         run: composer validate --strict
