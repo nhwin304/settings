@@ -5,16 +5,19 @@ declare(strict_types=1);
 use Nhwin\Settings\Facades\Setting as SettingFacade;
 
 if (! function_exists('settings')) {
-    
+
     /**
      * Retrieve a configuration value from the database.
      *
-     * @param  string $key      Dot-notation key (vd: "general.brand_name").
+     * @param  string  $key  Dot-notation key (vd: "general.brand_name").
      * @param  mixed  $default  Giá trị mặc định nếu không tìm thấy.
-     * @return mixed
      */
-    function settings(string $key, mixed $default = null): mixed
+    function settings(?string $key = null, mixed $default = null): mixed
     {
+        if ($key === null) {
+            return app(\Nhwin\Settings\Contracts\SettingsManagerContract::class);
+        }
+
         return SettingFacade::get($key, $default);
     }
 }

@@ -1,37 +1,8 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Nhwin\Settings\Filament\Plugins;
 
-use Filament\Contracts\Plugin;
-use Filament\Panel;
-
-class SettingPlugin implements Plugin
-{
-    public function getId(): string
-    {
-        return 'settings';
-    }
-
-    public function register(Panel $panel): void
-    {
-        //
-    }
-
-    public function boot(Panel $panel): void
-    {
-        //
-    }
-
-    public static function make(): static
-    {
-        return app(static::class);
-    }
-
-    public static function get(): static
-    {
-        /** @var static $plugin */
-        $plugin = filament(app(static::class)->getId());
-
-        return $plugin;
-    }
-}
+/** @deprecated Use SettingsPlugin. */
+class SettingPlugin extends SettingsPlugin {}

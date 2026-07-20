@@ -1,119 +1,374 @@
-# Settings – Lightweight settings & content manager for Filament
+# Nhwin Settings
 
-[![Run Tests](https://github.com/nhwin304/settings/actions/workflows/tests.yaml/badge.svg)](https://github.com/nhwin304/settings/actions/workflows/tests.yaml)
-[![Code Style](https://github.com/nhwin304/settings/actions/workflows/code-style.yml/badge.svg)](https://github.com/nhwin304/settings/actions/workflows/code-style.yml)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
+Gói quản lý cấu hình động cho Laravel, lưu dữ liệu theo `scope + group + key` dưới dạng JSON, có cache theo nhóm và tích hợp tùy chọn với Filament.
 
-- [Settings – Lightweight settings \& content manager for Filament](#db-config--lightweight-settings--content-manager-for-filament)
-  - [Requirements](#requirements)
-  - [Installation](#installation)
-  - [🚀 Getting Started](#-getting-started)
+## Tương thích
 
-## Requirements
+Constraint phát hành:
 
-- PHP version supported by your Laravel installation
-- Laravel 12
-- A database engine with JSON support (MySQL 5.7+, MariaDB 10.2.7+, PostgreSQL, SQLite recent versions)
-- Filament 4
-- PHP ^8.2 
+| Thành phần | Phiên bản hỗ trợ |
+| --- | --- |
+| PHP | 8.3+ |
+| Laravel | 11.28+ hoặc 12.x |
+| Filament | 4.x hoặc 5.x |
+| Livewire | 3.x với Filament 4; 4.x với Filament 5 |
 
+Các tổ hợp đã được chạy đầy đủ tại máy phát triển:
 
-## Installation
+| PHP | Laravel | Filament | Livewire | Kết quả |
+| --- | --- | --- | --- | --- |
+| 8.3.6 | 11.55 | 4.12.1 | 3.8.2 | Composer, Pint, PHPStan và Pest đều đạt |
+| 8.3.6 | 11.55 | 5.7.1 | 4.3.3 | Composer, Pint, PHPStan và Pest đều đạt |
+| 8.3.6 | 12.64 | 4.12.1 | 3.8.2 | Composer, Pint, PHPStan và Pest đều đạt |
+| 8.3.6 | 12.64 | 5.7.1 | 4.3.3 | Composer, Pint, PHPStan và Pest đều đạt |
 
-1. **Install the package** via Composer:
+CI còn chạy hai tổ hợp PHP 8.4 + Laravel 12 với Filament 4 và 5. Không cần khai báo trực tiếp Livewire trong ứng dụng; Filament sẽ chọn major phù hợp.
 
-    ```bash
-    composer require nhwin/settings
-    ```
+## Cài đặt
 
-2. **Publish the assets** (Configuration and Migration):
+```bash
+composer require nhwin/settings
+```
 
-    ```bash
+Xuất config và migration, sau đó chạy migration:
 
-    <!-- Publish Configuration -->
-    php artisan vendor:publish --tag=settings-config
-    
-	<!-- Publish Migrations -->
-    php artisan vendor:publish --tag=settings-migrations
+```bash
+php artisan vendor:publish --tag=settings-config
+php artisan vendor:publish --tag=settings-migrations
+php artisan vendor:publish --tag=settings-translations
+php artisan migrate
+```
 
-	<!-- Publish Lang -->
-    php artisan vendor:publish --tag=settings-translations
+Hoặc dùng lệnh cài đặt của package:
 
-    <!-- or -->
+```bash
+php artisan settings:install
+```
 
-    php artisan vendor:publish --provider="Nhwin\Settings\Providers\SettingServiceProvider"
-  
-    ```
+Tên bảng mặc định là `settings`. Có thể đổi `table_name` trong `config/settings.php` trước khi migrate.
 
-3. **Run the migration**:
+## Đọc và ghi cơ bản
 
-    ```bash
-    php artisan migrate
-    ```
+Helper cũ được giữ nguyên:
 
-    This command executes the migration file that you just published, creating the `settings` table (or the custom table name you defined in the config file) in your database. Your package is now ready to use!
+```php
+$name = settings('general.site_name');
+$name = settings('general.site_name', 'Tên mặc định');
+```
 
-> [!TIP]
-> If you want to use a custom table name instead of `settings`, edit the configuration file `config/settings.php` before running the migration. See the [Configuration](#configuration) section for details.
+Facade cũng giữ toàn bộ API cũ:
 
-## 🚀 Getting Started
+```php
+use Nhwin\Settings\Facades\Setting;
 
-Get up and running in just a few steps:
+Setting::set('general.site_name', 'Nhwin');
 
-1. **Generate Your First Settings Page**
+$name = Setting::get('general.site_name');
+$group = Setting::getGroup('general');
+$updatedAt = Setting::getGroupLastUpdatedAt('general');
+```
 
-    ```bash
-    php artisan make:settings Website
-    ```
+Trong Blade, directive sẽ escape HTML giống `{{ }}`:
 
-    This command creates a new Filament page (e.g., App/Filament/Pages/WebsiteSettings.php). You can repeat this step for more pages as needed.
+```blade
+<h1>@settings('general.site_name', 'Tên mặc định')</h1>
+```
 
-> [!NOTE]
-> The generator will automatically add the “Settings” suffix to the page name for consistency (e.g., WebsiteSettings), but you can use any group name you wish.
+Gọi `settings()` không truyền khóa để lấy manager:
 
-2. **Define Your Fields**
+```php
+settings()->setMany('general', [
+    'site_name' => 'Nhwin',
+    'maintenance' => false,
+]);
+```
 
-    Open the generated page and customize the form() method with your desired fields:
+## Dữ liệu lồng nhau
 
-    ```php
-    public function form(Form $form): Form
+Phần đầu là group, phần thứ hai là root key, các phần còn lại là đường dẫn lồng nhau:
+
+```php
+Setting::set('general.social', [
+    'facebook' => 'https://facebook.com/nhwin',
+    'github' => 'https://github.com/nhwin304',
+]);
+
+Setting::set('general.social.facebook', 'https://facebook.com/new-page');
+
+$facebook = Setting::get('general.social.facebook');
+$github = Setting::get('general.social.github'); // vẫn được giữ nguyên
+```
+
+Giá trị `null` đã lưu sẽ trả về `null`; default chỉ được dùng khi đường dẫn không tồn tại.
+
+## Ghi hàng loạt
+
+`setMany()` thực hiện một transaction, một lần `upsert()` cho cả group và một lần xóa cache sau commit:
+
+```php
+Setting::setMany('general', [
+    'site_name' => 'Nhwin',
+    'maintenance' => false,
+    'social' => [
+        'facebook' => 'https://facebook.com/nhwin',
+    ],
+]);
+```
+
+Trang Filament cũng dùng API này, không gọi `set()` lặp lại cho từng field.
+
+## Cache
+
+Cache được lưu theo toàn bộ group với khóa:
+
+```text
+{prefix}:{scope}:{group}
+settings:global:general
+```
+
+Cấu hình trong `config/settings.php`:
+
+```php
+'cache' => [
+    'prefix' => 'settings',
+    'ttl' => null,
+],
+```
+
+`ttl` tính theo phút. `null` hoặc `0` nghĩa là cache vĩnh viễn. Cache chỉ bị vô hiệu hóa sau khi transaction ghi DB commit thành công; rollback không làm lộ dữ liệu dở dang.
+
+## Getter kiểm tra kiểu
+
+```php
+Setting::string('general.site_name');
+Setting::integer('limits.upload_mb');
+Setting::float('payment.fee');
+Setting::boolean('general.maintenance');
+Setting::array('general.social');
+Setting::collection('general.social');
+```
+
+Nếu kiểu đã lưu không đúng, package ném `Nhwin\Settings\Exceptions\InvalidSettingType` và không đưa giá trị nhạy cảm vào thông báo lỗi.
+
+## Definition tùy chọn
+
+Settings động vẫn là mặc định. Khi cần default, cast và danh sách mã hóa, tạo definition:
+
+```php
+namespace App\Settings;
+
+use Nhwin\Settings\Definitions\SettingsDefinition;
+
+final class GeneralSettingsDefinition extends SettingsDefinition
+{
+    public static function group(): string
     {
-        return $form
-            ->components([
-                TextInput::make('site_name')->label('Site Name'),
-                TextInput::make('contact_email')->label('Contact Email'),
-                Toggle::make('maintenance_mode')->label('Maintenance Mode'),
-            ])
-            ->statePath('data');
+        return 'general';
     }
-    ```
 
-> [!NOTE]
-> You may use **any Filament form fields or layout components - including third-party ones -** to build your settings and content pages, giving you full flexibility in how data is structured and edited.
+    public function defaults(): array
+    {
+        return ['site_name' => '', 'maintenance' => false];
+    }
 
-3. **Save and Edit Settings from the Admin Panel**
+    public function casts(): array
+    {
+        return ['site_name' => 'string', 'maintenance' => 'boolean'];
+    }
 
-    You can now edit these settings directly in your Filament admin panel—no extra boilerplate needed.
+    public function encrypted(): array
+    {
+        return ['api.token'];
+    }
+}
+```
 
-4. **Use Your Settings Anywhere**
+Đăng ký trong `config/settings.php`:
 
-    Retrieve your configuration values easily:
-   - In PHP:
+```php
+'definitions' => [
+    App\Settings\GeneralSettingsDefinition::class,
+],
+```
 
-       ```php
-       $siteName = settings('website.site_name', 'Default Site Name');
-       ```
+## Mã hóa secret
 
-   - In Blade:
+Mã hóa một giá trị cụ thể bằng Laravel Encrypter:
 
-       ```html
-       <h1>{{ settings('website.site_name', 'Default Site Name') }}</h1>
+```php
+Setting::setEncrypted('mail.smtp.password', $password);
+$password = Setting::get('mail.smtp.password');
+```
 
-       <!-- or -->
+DB chỉ chứa ciphertext. Khi cập nhật `mail.smtp.host`, sibling `mail.smtp.password` vẫn được giữ ở dạng mã hóa. Payload hỏng sẽ ném `DecryptException`; events luôn thay secret bằng `[encrypted]`.
 
-       <h1>@settings('website.site_name', 'Default Site Name')</h1>
-       ```
+## Tạo trang Filament
 
-**That’s it!** 🎉
+Lệnh tối thiểu:
 
-Define your fields, save from the admin panel, and access your settings anywhere in your Laravel app.
+```bash
+php artisan make:settings General
+```
+
+Các tùy chọn:
+
+```bash
+php artisan make:settings General \
+    --panel=super-admin \
+    --group=general \
+    --preset=general \
+    --typed \
+    --hub \
+    --force \
+    --no-interaction
+```
+
+- `--panel`: hỗ trợ ID như `admin`, `super-admin`, `author_panel`.
+- `--group`: group lưu trong DB.
+- `--preset`: `general`, `seo`, `mail`, `social`, `analytics`.
+- `--typed`: sinh thêm `app/Settings/*SettingsDefinition.php`.
+- `--hub`: thêm metadata để registry dùng trong Settings Hub.
+- `--force`: cho phép ghi đè file đã có.
+- `--no-interaction`: dùng trong CI; bắt buộc truyền tên page.
+
+Page sinh ra tương thích Filament 4/5 và kế thừa `AbstractPageSettings`. Base page hỗ trợ `beforeFill`, `afterFill`, `beforeValidate`, `afterValidate`, `beforeSave`, `afterSave`, hai hook mutate, transaction, unsaved-change alert và phím `Ctrl/Cmd + S`.
+
+```php
+protected function mutateFormDataBeforeSave(array $data): array
+{
+    $data['saved_by'] = auth()->id();
+
+    return $data;
+}
+```
+
+## Settings Hub
+
+Đăng ký plugin trong Panel Provider:
+
+```php
+use App\Filament\Admin\Pages\GeneralSettings;
+use Nhwin\Settings\Filament\Plugins\SettingsPlugin;
+
+public function panel(Panel $panel): Panel
+{
+    return $panel->plugin(
+        SettingsPlugin::make()
+            ->pages([GeneralSettings::class])
+            ->hub()
+    );
+}
+```
+
+Có thể khai báo metadata thủ công:
+
+```php
+use Nhwin\Settings\Filament\SettingsPageDefinition;
+
+SettingsPageDefinition::make(GeneralSettings::class)
+    ->label('Cấu hình chung')
+    ->description('Nhận diện và giá trị mặc định')
+    ->icon('heroicon-o-cog-6-tooth')
+    ->group('Hệ thống')
+    ->sort(1)
+    ->badge('Mới')
+    ->canAccess(fn (): bool => auth()->user()?->can('settings.view') ?? false);
+```
+
+Đích ngoài Filament cũng được hỗ trợ:
+
+```php
+SettingsPageDefinition::external('/profile/settings')->label('Hồ sơ');
+```
+
+Class cũ `SettingPlugin` vẫn hoạt động nhưng đã deprecated; nên chuyển sang `SettingsPlugin`.
+
+## Quyền truy cập và nhiều panel
+
+Không bắt buộc Filament Shield:
+
+```php
+SettingsPlugin::make()
+    ->pages([GeneralSettings::class])
+    ->hub()
+    ->canAccess(fn (): bool => auth()->user()?->can('settings.view') ?? false);
+```
+
+Mỗi panel phải có plugin instance riêng; registry không rò cấu hình giữa panel:
+
+```php
+$adminPlugin = SettingsPlugin::make()
+    ->pages([GeneralSettings::class, SeoSettings::class])
+    ->hub();
+
+$authorPlugin = SettingsPlugin::make()
+    ->pages([AuthorSettings::class])
+    ->hub();
+```
+
+## Scope và multi-tenancy
+
+Scope mặc định là `global`:
+
+```php
+Setting::forScope('tenant:15')->set('general.site_name', 'Tenant 15');
+
+$name = Setting::forScope('tenant:15')->get('general.site_name');
+```
+
+Không hard-code `tenant_id`. Có thể thay resolver:
+
+```php
+use Nhwin\Settings\Contracts\ScopeResolver;
+
+final class TenantScopeResolver implements ScopeResolver
+{
+    public function resolve(): string
+    {
+        return auth()->check() ? 'tenant:'.auth()->user()->tenant_id : 'global';
+    }
+}
+```
+
+```php
+'scope_resolver' => App\Settings\TenantScopeResolver::class,
+```
+
+## Events
+
+Sau commit thành công, package phát:
+
+```php
+Nhwin\Settings\Events\SettingUpdated::class
+Nhwin\Settings\Events\SettingsGroupUpdated::class
+```
+
+Event chứa `scope`, `group`, key thay đổi và old/new value an toàn. Hãy xử lý việc reload mail config, xóa theme cache hoặc tạo sitemap trong listener của ứng dụng, không đặt side effect vào core package.
+
+## Nâng cấp từ phiên bản cũ
+
+1. Nâng PHP lên 8.3+ và chọn Laravel 11.28+/12.
+2. Chạy `composer update nhwin/settings filament/filament --with-all-dependencies`.
+3. Publish migration mới và chạy `php artisan migrate`. Migration thêm `scope = global` cho dữ liệu hiện hữu và đổi unique key thành `(scope, group, key)`.
+4. Không cần đổi `settings()`, facade `Setting`, `@settings`, `getGroup()` hoặc `getGroupLastUpdatedAt()`.
+5. Page cũ chỉ cần sửa import sai lịch sử thành `Nhwin\Settings\Abstracts\AbstractPageSettings` nếu từng được sinh bởi bản lỗi.
+6. Đổi `Nhwin\Settings\Filament\Plugins\SettingPlugin` sang `SettingsPlugin` khi thuận tiện.
+7. Kiểm tra mọi code từng dựa vào hành vi nested set cũ; nested set nay chỉ cập nhật đúng nhánh và giữ sibling.
+
+## Phát triển và kiểm thử
+
+```bash
+composer validate --strict
+composer format:test
+composer analyse
+composer test
+
+# Chạy cả formatter, PHPStan và Pest
+composer check
+```
+
+CI chạy ma trận PHP 8.3/8.4, Laravel 11/12 và Filament 4/5. Filament 5 được ghép với Livewire 4.1+ trong job tương ứng.
+
+## Giấy phép
+
+MIT. Xem [LICENSE](LICENSE).

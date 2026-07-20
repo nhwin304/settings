@@ -1,0 +1,28 @@
+<?php
+
+namespace App\Settings;
+
+use Nhwin\Settings\Definitions\SettingsDefinition;
+
+final class $CLASS_NAME$SettingsDefinition extends SettingsDefinition
+{
+    public static function group(): string
+    {
+        return '$SETTING_NAME$';
+    }
+
+    public function defaults(): array
+    {
+        return $DEFAULT_DATA$;
+    }
+
+    public function casts(): array
+    {
+        return $CASTS$;
+    }
+
+    public function encrypted(): array
+    {
+        return $ENCRYPTED$;
+    }
+}

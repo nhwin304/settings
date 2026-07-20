@@ -1,5 +1,5 @@
 <?php
 
-use Huythang304\Settings\Tests\TestCase;
+use Nhwin\Settings\Tests\TestCase;
 
 uses(TestCase::class)->in(__DIR__);

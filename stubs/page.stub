@@ -3,9 +3,10 @@
 namespace App\Filament\$PANEL$Pages;
 
 use BackedEnum;
-use Nhwin\Settings\AbstractPageSettings;
-use Filament\Schemas\Components;
+use Nhwin\Settings\Abstracts\AbstractPageSettings;
 use Filament\Schemas\Schema;
+$COMPONENT_IMPORTS$
+$HUB_IMPORT$
 
 class $CLASS_NAME$Settings extends AbstractPageSettings
 {
@@ -36,15 +37,17 @@ class $CLASS_NAME$Settings extends AbstractPageSettings
      */
     public function getDefaultData(): array
     {
-        return [];
+        return $DEFAULT_DATA$;
     }
 
     public function form(Schema $schema): Schema
     {
         return $schema
             ->components([
-                //
+$FORM_COMPONENTS$
             ])
             ->statePath('data');
     }
+
+$HUB_METADATA$
 }

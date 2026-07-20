@@ -4,141 +4,55 @@ declare(strict_types=1);
 
 namespace Nhwin\Settings\Supports;
 
-use Carbon\Carbon;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
+use Nhwin\Settings\Contracts\SettingsManagerContract;
 
+/**
+ * @deprecated Use SettingsManagerContract or the Setting facade. Kept for compatibility.
+ */
 class Setting
 {
-	public static function get(string $key, mixed $default = null): mixed
+    public static function forScope(string $scope): SettingsManagerContract
     {
-        [$group, $setting, $subKey] = static::parseKey($key);
+        return static::manager()->forScope($scope);
+    }
 
-        $cacheKey = static::getCacheKey($group, $setting);
-        $cacheTtl = config('settings.cache.ttl');
-
-        $callback = fn () => static::fetchSetting($group, $setting);
-
-        // Use remember() with TTL if provided, otherwise rememberForever()
-        $data = ($cacheTtl > 0)
-            ? Cache::remember($cacheKey, $cacheTtl * 60, $callback)
-            : Cache::rememberForever($cacheKey, $callback);
-
-        $value = data_get($data, $subKey, $default);
-
-        return $value ?? $default;
+    public static function get(string $key, mixed $default = null): mixed
+    {
+        return static::manager()->get($key, $default);
     }
 
     public static function set(string $key, mixed $value): void
     {
-        [$group, $setting] = static::parseKey($key);
-
-        $cacheKey = static::getCacheKey($group, $setting);
-
-        Cache::forget($cacheKey);
-
-        static::storeSetting($group, $setting, $value);
+        static::manager()->set($key, $value);
     }
 
-    public static function getGroup(string $group): ?array
+    public static function setEncrypted(string $key, mixed $value): void
     {
-        $settings = [];
-
-        $tableName = config('settings.table_name', 'Settings');
-
-        DB::table($tableName)->where('group', $group)->get()->each(function (\stdClass $setting) use (&$settings) {
-            $settings[$setting->key] = json_decode($setting->value, true);
-        });
-
-        return $settings;
+        static::manager()->setEncrypted($key, $value);
     }
 
-    public static function getGroupLastUpdatedAt(string $group, string $format = 'H:i:s d/m/Y', ?string $timezone = null): ?string
+    /** @param array<string, mixed> $values */
+    public static function setMany(string $group, array $values): void
     {
-        $tableName = config('settings.table_name', 'settings');
-
-        $timestamp = DB::table($tableName)
-            ->where('group', $group)
-            ->max('updated_at');
-
-        if (empty($timestamp)) {
-            return null;
-        }
-
-        try {
-            $fromTz = config('app.timezone', 'UTC');
-            
-            // If no timezone is provided, use app.timezone from config
-            $timezone = $timezone ?? config('app.timezone', 'UTC');
-            
-            $dt = $timestamp instanceof Carbon
-                ? $timestamp
-                : Carbon::parse($timestamp, $fromTz);
-
-            return $dt->setTimezone($timezone)->format($format);
-        } catch (\Throwable $e) {
-            return null;
-        }
+        static::manager()->setMany($group, $values);
     }
 
-    protected static function parseKey(string $key): array
+    /** @return array<string, mixed> */
+    public static function getGroup(string $group): array
     {
-        $keyParts = explode('.', $key);
-        $group = array_shift($keyParts);
-        $setting = $keyParts[0] ?? null;
-        $subKey = implode('.', $keyParts);
-
-        return [$group, $setting, $subKey];
+        return static::manager()->getGroup($group);
     }
 
-    protected static function fetchSetting(string $group, string $setting): array
-    {
-        $tableName = config('settings.table_name', 'settings');
-
-        /** @var \stdClass|null $item */
-        $item = DB::table($tableName)
-            ->where('group', $group)
-            ->where('key', $setting)
-            ->first();
-
-        if ($item === null || ! property_exists($item, 'value')) {
-            return [];
-        }
-
-        return [
-            $setting => json_decode($item->value, true),
-        ];
+    public static function getGroupLastUpdatedAt(
+        string $group,
+        string $format = 'H:i:s d/m/Y',
+        ?string $timezone = null,
+    ): ?string {
+        return static::manager()->getGroupLastUpdatedAt($group, $format, $timezone);
     }
 
-    protected static function storeSetting(string $group, string $setting, mixed $value): void
+    protected static function manager(): SettingsManagerContract
     {
-        $tableName = config('settings.table_name', 'settings');
-
-        try {
-            $encoded = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
-        } catch (\JsonException $e) {
-            throw new \RuntimeException('Unable to serialize value to JSON: ' . $e->getMessage(), 0, $e);
-        }
-
-        DB::table($tableName)->upsert(
-            [
-                [
-                    'group' => $group,
-                    'key' => $setting,
-                    'value' => $encoded,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ],
-            ],
-            ['group', 'key'],
-            ['value', 'updated_at']
-        );
-    }
-
-    protected static function getCacheKey(string $group, string $setting): string
-    {
-        $prefix = config('settings.cache.prefix', 'settings');
-
-        return "{$prefix}.{$group}.{$setting}";
+        return app(SettingsManagerContract::class);
     }
 }

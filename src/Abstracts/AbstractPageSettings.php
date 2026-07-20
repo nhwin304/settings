@@ -6,128 +6,155 @@ namespace Nhwin\Settings\Abstracts;
 
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
+use Filament\Pages\Concerns\CanUseDatabaseTransactions;
+use Filament\Pages\Concerns\HasUnsavedDataChangesAlert;
 use Filament\Pages\Page;
-use RuntimeException;
+use Nhwin\Settings\Facades\Setting;
+use Nhwin\Settings\Filament\Compatibility\SettingsPageAdapter;
+use Nhwin\Settings\Filament\Plugins\SettingsPlugin;
+use Throwable;
 
 /**
- * Abstract base page for Filament settings pages that persist a named configuration group.
- *
- * Loads default values, merges them with persisted data from the database, and provides
- * lifecycle helpers and a save routine that persists form state into the corresponding
- * configuration group.
- *
- * @property object|null $form Instance of the content (form/schema) used by the page.
- * @property object|null $content Instance of the content (form/schema) used by the page.
+ * @property object $form
+ * @property object $content
  */
 abstract class AbstractPageSettings extends Page
 {
-    /**
-     * Data loaded from the DB config group.
-     *
-     * @var array<string,mixed>|null
-     */
+    use CanUseDatabaseTransactions;
+    use HasUnsavedDataChangesAlert;
+
+    /** @var array<string, mixed>|null */
     public ?array $data = [];
 
-    protected static string | BackedEnum | null $navigationIcon = 'heroicon-o-cog-8-tooth';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-cog-8-tooth';
 
-    /**
-     * Returns the navigation group label used by the Filament UI to group this page.
-     *
-     * The value is retrieved from translation resources and may be null when a translation
-     * is not defined.
-     */
     public static function getNavigationGroup(): ?string
     {
         return __('settings::settings.navigation_group');
     }
 
+    public static function canAccess(): bool
+    {
+        $panel = Filament::getCurrentPanel();
+
+        if ($panel === null || ! $panel->hasPlugin('settings')) {
+            return true;
+        }
+
+        $plugin = $panel->getPlugin('settings');
+
+        return ! $plugin instanceof SettingsPlugin || $plugin->isAccessible();
+    }
+
     abstract protected function settingName(): string;
 
-    /**
-     * Returns the default data used to initialize the page state.
-     *
-     * These defaults are merged with persisted values; persisted values take precedence.
-     *
-     * @return array<string, mixed> Array of default values keyed by setting name.
-     */
+    /** @return array<string, mixed> */
     public function getDefaultData(): array
     {
         return [];
     }
 
-    /**
-     * Returns the formatted last-updated timestamp for the settings group associated with this page.
-     *
-     * Accepts timezone and format parameters and returns a formatted string, or null if the
-     * timestamp is not available.
-     *
-     * @param  string       $format   Date format string compatible with PHP's date() function.
-     * @param  string|null  $timezone Optional timezone identifier (e.g. 'UTC', 'Europe/Rome').
-     * @return string|null Formatted timestamp or null if not available.
-     */
-    public function lastUpdatedAt(string $format = 'H:i:s d/m/Y', ?string $timezone = null): ?string
-    {
+    public function lastUpdatedAt(
+        string $format = 'H:i:s d/m/Y',
+        ?string $timezone = null,
+    ): ?string {
         return Setting::getGroupLastUpdatedAt($this->settingName(), $format, $timezone);
     }
 
-    /**
-     * Initializes the page state by loading persisted values for the settings group and merging them with defaults.
-     *
-     * The merged result is assigned to the internal `$data` property.
-     * If the page defines a `$form` or `$content` property, it is filled with the merged data.
-     */
     public function mount(): void
     {
-        $db = Setting::getGroup($this->settingName()) ?? [];
-        $defaults = $this->getDefaultData();
+        $this->callHook('beforeFill');
 
-        // Merge defaults with DB values: DB values take precedence.
-        $this->data = array_replace_recursive($defaults, $db);
+        $data = array_replace_recursive(
+            $this->getDefaultData(),
+            Setting::getGroup($this->settingName()),
+        );
+        $this->data = $this->mutateFormDataBeforeFill($data);
 
-        // Support both $this->content and $this->form for the schema instance.
-        if (! isset($this->form)) {
-            $this->form = $this->content;
-        }
-
-        $this->form->fill($this->data);
+        $this->adapter()->fill($this->settingsForm(), $this->data);
+        $this->callHook('afterFill');
+        $this->rememberData();
     }
 
-    /**
-     * Persists the current form state into the associated settings group.
-     *
-     * If `$this->form` is not set, `$this->content` is used as fallback. The method verifies at runtime
-     * that the form instance exposes `getState()`; it iterates every key/value pair returned by `getState()`
-     * and calls `Setting::set("{settingName}.{key}", $value)` to persist each value. A Filament
-     * notification is sent upon successful completion.
-     *
-     * @throws RuntimeException When the form instance is missing or does not provide `getState()`.
-     */
     public function save(): void
     {
-        // Support both $this->content and $this->form for the schema instance.
-        if (! isset($this->form)) {
-            $this->form = $this->content;
+        $form = $this->settingsForm();
+
+        try {
+            $this->beginDatabaseTransaction();
+            $this->callHook('beforeValidate');
+
+            $data = $this->adapter()->state($form);
+            $this->callHook('afterValidate');
+            $data = $this->mutateFormDataBeforeSave($data);
+            $this->callHook('beforeSave');
+
+            Setting::setMany($this->settingName(), $data);
+            $this->adapter()->saveRelationships($form);
+            $this->callHook('afterSave');
+        } catch (Throwable $exception) {
+            $this->rollBackDatabaseTransaction();
+
+            throw $exception;
         }
 
-        if (! is_object($this->form) || ! method_exists($this->form, 'getState')) {
-            throw new \RuntimeException('Expected $this->form to be an object exposing getState().');
-        }
-
-        /** @var array<string,mixed> $state */
-        $state = $this->form->getState();
-
-        collect($state)->each(function ($setting, $key) {
-            Setting::set($this->settingName() . '.' . $key, $setting);
-        });
-
-        Notification::make()
-            ->success()
-            ->title(__('settings::settings.saved_title'))
-            ->body(__('settings::settings.saved_body'))
-            ->send();
+        $this->commitDatabaseTransaction();
+        $this->data = $data;
+        $this->rememberData();
+        $this->getSavedNotification()?->send();
     }
 
+    /** @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    protected function mutateFormDataBeforeFill(array $data): array
+    {
+        return $data;
+    }
+
+    /** @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        return $data;
+    }
+
+    public function hasDatabaseTransactions(): bool
+    {
+        return true;
+    }
+
+    protected function hasUnsavedDataChangesAlert(): bool
+    {
+        return true;
+    }
+
+    protected function settingsForm(): object
+    {
+        if (isset($this->form)) {
+            return $this->form;
+        }
+
+        return $this->content;
+    }
+
+    protected function adapter(): SettingsPageAdapter
+    {
+        return app(SettingsPageAdapter::class);
+    }
+
+    protected function getSavedNotification(): ?Notification
+    {
+        return Notification::make()
+            ->success()
+            ->title(__('settings::settings.saved_title'))
+            ->body(__('settings::settings.saved_body'));
+    }
+
+    /** @return array<Action> */
     protected function getHeaderActions(): array
     {
         return [

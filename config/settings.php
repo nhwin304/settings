@@ -3,6 +3,8 @@
 // config for Nhwin/Settings
 return [
 
+    'scope_resolver' => Nhwin\Settings\Support\DefaultScopeResolver::class,
+
     /*
     |--------------------------------------------------------------------------
     | Table Name
@@ -28,5 +30,8 @@ return [
         'prefix' => 'settings',
         'ttl' => null, // Cache forever by default
     ],
+
+    /* Optional SettingsDefinition classes keyed by their static group(). */
+    'definitions' => [],
 
 ];

@@ -6,12 +6,14 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    public function up()
+    public function up(): void
     {
         $tableName = config('settings.table_name', 'settings');
 
         Schema::create($tableName, function (Blueprint $table) {
             $table->id();
+
+            $table->string('scope')->default('global');
 
             $table->string('group');
 
@@ -19,9 +21,14 @@ return new class extends Migration
 
             $table->json('value')->nullable();
 
-            $table->unique(['group', 'key']);
+            $table->unique(['scope', 'group', 'key']);
 
             $table->timestamps();
         });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists(config('settings.table_name', 'settings'));
     }
 };
