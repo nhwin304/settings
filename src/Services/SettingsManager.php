@@ -12,9 +12,12 @@ use Nhwin\Settings\Contracts\ScopeResolver;
 use Nhwin\Settings\Contracts\SettingsManagerContract;
 use Nhwin\Settings\Contracts\SettingsRepository;
 use Nhwin\Settings\Definitions\DefinitionRegistry;
+use Nhwin\Settings\Events\SettingDeleted;
+use Nhwin\Settings\Events\SettingsGroupDeleted;
 use Nhwin\Settings\Events\SettingsGroupUpdated;
 use Nhwin\Settings\Events\SettingUpdated;
 use Nhwin\Settings\Exceptions\InvalidSettingType;
+use Nhwin\Settings\Support\BooleanCaster;
 use Nhwin\Settings\Support\SettingKey;
 use Nhwin\Settings\Support\SettingsCache;
 
@@ -24,7 +27,7 @@ class SettingsManager implements SettingsManagerContract
 
     private const REDACTED = '[encrypted]';
 
-    protected string $scope;
+    protected ?string $explicitScope = null;
 
     public function __construct(
         protected SettingsRepository $repository,
@@ -33,15 +36,13 @@ class SettingsManager implements SettingsManagerContract
         protected Encrypter $encrypter,
         protected Dispatcher $events,
         protected DefinitionRegistry $definitions,
-        ScopeResolver $scopeResolver,
-    ) {
-        $this->scope = $scopeResolver->resolve();
-    }
+        protected ScopeResolver $scopeResolver,
+    ) {}
 
     public function forScope(string $scope): static
     {
         $manager = clone $this;
-        $manager->scope = $scope;
+        $manager->explicitScope = $scope;
 
         return $manager;
     }
@@ -80,18 +81,134 @@ class SettingsManager implements SettingsManagerContract
         $this->setParsed(SettingKey::parse($key), $this->encrypt($value));
     }
 
+    public function clearEncrypted(string $key): void
+    {
+        $this->setParsed(SettingKey::parse($key), null);
+    }
+
+    public function forget(string $key): void
+    {
+        $parsed = SettingKey::parse($key);
+        $scope = $this->currentScope();
+        $oldGroup = $this->rawGroup($parsed->group);
+
+        if (! array_key_exists($parsed->root, $oldGroup)) {
+            return;
+        }
+
+        if ($parsed->nestedPath === null) {
+            $oldValue = $this->safeEventValue($oldGroup[$parsed->root]);
+            $this->deleteRoot($scope, $parsed->group, $parsed->root, $parsed->root, $oldValue);
+
+            return;
+        }
+
+        $root = $oldGroup[$parsed->root];
+
+        if (! is_array($root)) {
+            return;
+        }
+
+        $missing = new \stdClass;
+        $oldValue = data_get($root, $parsed->nestedPath, $missing);
+
+        if ($oldValue === $missing) {
+            return;
+        }
+
+        data_forget($root, $parsed->nestedPath);
+        $eventKey = $parsed->root.'.'.$parsed->nestedPath;
+        $safeOldValue = $this->safeEventValue($oldValue);
+
+        if ($root === []) {
+            $this->deleteRoot($scope, $parsed->group, $parsed->root, $eventKey, $safeOldValue);
+
+            return;
+        }
+
+        $this->database->transaction(function () use (
+            $scope,
+            $parsed,
+            $root,
+            $eventKey,
+            $safeOldValue,
+        ): void {
+            $this->repository->setMany($scope, $parsed->group, [$parsed->root => $root]);
+            $this->database->afterCommit(function () use ($scope, $parsed, $eventKey, $safeOldValue): void {
+                $this->cache->forget($scope, $parsed->group);
+                $this->events->dispatch(new SettingDeleted(
+                    $scope,
+                    $parsed->group,
+                    $eventKey,
+                    $safeOldValue,
+                ));
+            });
+        });
+    }
+
+    public function forgetGroup(string $group): void
+    {
+        $scope = $this->currentScope();
+        $oldGroup = $this->rawGroup($group);
+
+        if ($oldGroup === []) {
+            return;
+        }
+
+        $oldValues = array_map($this->safeEventValue(...), $oldGroup);
+        $deletedKeys = array_keys($oldGroup);
+
+        $this->database->transaction(function () use ($scope, $group, $oldValues, $deletedKeys): void {
+            $this->repository->forgetGroup($scope, $group);
+            $this->database->afterCommit(function () use ($scope, $group, $oldValues, $deletedKeys): void {
+                $this->cache->forget($scope, $group);
+                $this->events->dispatch(new SettingsGroupDeleted(
+                    $scope,
+                    $group,
+                    $deletedKeys,
+                    $oldValues,
+                ));
+            });
+        });
+    }
+
     public function setMany(string $group, array $values): void
     {
         $definition = $this->definitions->get($group);
 
         if ($definition !== null) {
+            $rawGroup = $this->rawGroup($group);
+
             foreach ($definition->encrypted() as $path) {
+                $root = explode('.', $path, 2)[0];
+
+                if (! array_key_exists($root, $values)) {
+                    continue;
+                }
+
                 $missing = new \stdClass;
                 $value = data_get($values, $path, $missing);
+                $stored = data_get($rawGroup, $path, $missing);
 
-                if ($value !== $missing && ! $this->isEncrypted($value)) {
-                    data_set($values, $path, $this->encrypt($value));
+                if ($value === $missing || $this->isBlankSecret($value)) {
+                    if ($stored !== $missing) {
+                        data_set($values, $path, $stored);
+                    }
+
+                    continue;
                 }
+
+                if ($this->isEncrypted($value)) {
+                    continue;
+                }
+
+                if ($stored !== $missing && $this->isEncrypted($stored) && $this->decrypt($stored) === $value) {
+                    data_set($values, $path, $stored);
+
+                    continue;
+                }
+
+                data_set($values, $path, $this->encrypt($value));
             }
         }
 
@@ -121,7 +238,7 @@ class SettingsManager implements SettingsManagerContract
                 'string' => (string) $value,
                 'integer' => (int) $value,
                 'float' => (float) $value,
-                'boolean' => (bool) $value,
+                'boolean' => BooleanCaster::cast("{$group}.{$path}", $value),
                 'array' => (array) $value,
             });
         }
@@ -134,7 +251,7 @@ class SettingsManager implements SettingsManagerContract
         string $format = 'H:i:s d/m/Y',
         ?string $timezone = null,
     ): ?string {
-        $updatedAt = $this->repository->lastUpdatedAt($this->scope, $group);
+        $updatedAt = $this->repository->lastUpdatedAt($this->currentScope(), $group);
 
         if ($updatedAt === null) {
             return null;
@@ -157,7 +274,13 @@ class SettingsManager implements SettingsManagerContract
 
     public function float(string $key, ?float $default = null): float
     {
-        return $this->typed($key, $default, 'float', is_float(...));
+        $value = $this->get($key, $default);
+
+        if (! is_int($value) && ! is_float($value)) {
+            throw InvalidSettingType::forKey($key, 'float', $value);
+        }
+
+        return (float) $value;
     }
 
     public function boolean(string $key, ?bool $default = null): bool
@@ -186,10 +309,12 @@ class SettingsManager implements SettingsManagerContract
     /** @return array<string, mixed> */
     protected function rawGroup(string $group): array
     {
+        $scope = $this->currentScope();
+
         return $this->cache->remember(
-            $this->scope,
+            $scope,
             $group,
-            fn (): array => $this->repository->getGroup($this->scope, $group),
+            fn (): array => $this->repository->getGroup($scope, $group),
         );
     }
 
@@ -218,7 +343,7 @@ class SettingsManager implements SettingsManagerContract
             return;
         }
 
-        $scope = $this->scope;
+        $scope = $this->currentScope();
         $oldGroup = $this->rawGroup($group);
         $changedKeys = array_values(array_filter(
             array_keys($values),
@@ -231,6 +356,7 @@ class SettingsManager implements SettingsManagerContract
 
         $oldValues = [];
         $newValues = [];
+        $changedValues = array_intersect_key($values, array_flip($changedKeys));
 
         foreach ($changedKeys as $key) {
             $oldValues[$key] = $this->safeEventValue($oldGroup[$key] ?? null);
@@ -240,12 +366,12 @@ class SettingsManager implements SettingsManagerContract
         $this->database->transaction(function () use (
             $scope,
             $group,
-            $values,
+            $changedValues,
             $changedKeys,
             $oldValues,
             $newValues,
         ): void {
-            $this->repository->setMany($scope, $group, $values);
+            $this->repository->setMany($scope, $group, $changedValues);
             $this->database->afterCommit(function () use (
                 $scope,
                 $group,
@@ -271,6 +397,32 @@ class SettingsManager implements SettingsManagerContract
                     $changedKeys,
                     $oldValues,
                     $newValues,
+                ));
+            });
+        });
+    }
+
+    protected function currentScope(): string
+    {
+        return $this->explicitScope ?? $this->scopeResolver->resolve();
+    }
+
+    private function deleteRoot(
+        string $scope,
+        string $group,
+        string $root,
+        string $eventKey,
+        mixed $safeOldValue,
+    ): void {
+        $this->database->transaction(function () use ($scope, $group, $root, $eventKey, $safeOldValue): void {
+            $this->repository->forget($scope, $group, $root);
+            $this->database->afterCommit(function () use ($scope, $group, $eventKey, $safeOldValue): void {
+                $this->cache->forget($scope, $group);
+                $this->events->dispatch(new SettingDeleted(
+                    $scope,
+                    $group,
+                    $eventKey,
+                    $safeOldValue,
                 ));
             });
         });
@@ -317,6 +469,11 @@ class SettingsManager implements SettingsManagerContract
             && count($value) === 1
             && isset($value[self::ENCRYPTED_MARKER])
             && is_string($value[self::ENCRYPTED_MARKER]);
+    }
+
+    private function isBlankSecret(mixed $value): bool
+    {
+        return $value === null || (is_string($value) && trim($value) === '');
     }
 
     private function safeEventValue(mixed $value): mixed

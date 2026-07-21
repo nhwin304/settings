@@ -14,5 +14,9 @@ interface SettingsRepository
     /** @param array<string, mixed> $values */
     public function setMany(string $scope, string $group, array $values): void;
 
+    public function forget(string $scope, string $group, string $key): void;
+
+    public function forgetGroup(string $scope, string $group): void;
+
     public function lastUpdatedAt(string $scope, string $group): ?CarbonInterface;
 }

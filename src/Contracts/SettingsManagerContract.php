@@ -16,6 +16,12 @@ interface SettingsManagerContract
 
     public function setEncrypted(string $key, mixed $value): void;
 
+    public function clearEncrypted(string $key): void;
+
+    public function forget(string $key): void;
+
+    public function forgetGroup(string $group): void;
+
     /** @param array<string, mixed> $values */
     public function setMany(string $group, array $values): void;
 

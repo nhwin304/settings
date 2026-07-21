@@ -150,6 +150,8 @@ Setting::collection('general.social');
 
 Nếu kiểu đã lưu không đúng, package ném `Nhwin\Settings\Exceptions\InvalidSettingType` và không đưa giá trị nhạy cảm vào thông báo lỗi.
 
+`float()` nhận số JSON kiểu integer hoặc float rồi luôn trả về `float`; chuỗi số như `"5.5"` bị từ chối. Boolean cast trong definition nhận `true`, `false`, `1`, `0` và các chuỗi không phân biệt hoa thường `"1"`, `"0"`, `"true"`, `"false"`, `"yes"`, `"no"`, `"on"`, `"off"`; giá trị mơ hồ bị từ chối.
+
 ## Definition tùy chọn
 
 Settings động vẫn là mặc định. Khi cần default, cast và danh sách mã hóa, tạo definition:
@@ -200,7 +202,14 @@ Setting::setEncrypted('mail.smtp.password', $password);
 $password = Setting::get('mail.smtp.password');
 ```
 
-DB chỉ chứa ciphertext. Khi cập nhật `mail.smtp.host`, sibling `mail.smtp.password` vẫn được giữ ở dạng mã hóa. Payload hỏng sẽ ném `DecryptException`; events luôn thay secret bằng `[encrypted]`.
+DB chỉ chứa ciphertext. Với path được khai báo trong `SettingsDefinition::encrypted()`:
+
+- Không gửi field secret hoặc gửi chuỗi trống/`null`: giữ nguyên ciphertext hiện có.
+- Gửi lại đúng plaintext hiện có: giữ nguyên ciphertext và không phát update event giả.
+- Gửi plaintext mới: mã hóa một lần và thay thế secret.
+- Xóa có chủ đích: dùng `Setting::clearEncrypted('mail.smtp.password')` để clear thành `null`, hoặc `Setting::forget('mail.smtp.password')` để xóa path.
+
+Form Filament được fill bằng giá trị trống thay vì plaintext secret; password field do generator tạo chỉ dehydrate khi có input mới. Payload hỏng sẽ ném `DecryptException`; events và audit entries luôn thay secret bằng `[encrypted]`.
 
 ## Tạo trang Filament
 
@@ -294,6 +303,17 @@ SettingsPlugin::make()
     ->canAccess(fn (): bool => auth()->user()?->can('settings.view') ?? false);
 ```
 
+Quyền cuối cùng là giao của ba lớp: callback plugin, callback trên `SettingsPageDefinition`, và hook native của page. Khi một definition trả về `false`, card trong Hub và navigation bị ẩn, đồng thời direct route bị chặn qua `AbstractPageSettings::canAccess()`.
+
+Để thêm rule riêng cho page mà vẫn giữ toàn bộ lớp bảo vệ, override hook sau thay vì thay thế `canAccess()`:
+
+```php
+protected static function canAccessSettingsPage(): bool
+{
+    return auth()->user()?->can('settings.general') ?? false;
+}
+```
+
 Mỗi panel phải có plugin instance riêng; registry không rò cấu hình giữa panel:
 
 ```php
@@ -334,6 +354,18 @@ final class TenantScopeResolver implements ScopeResolver
 'scope_resolver' => App\Settings\TenantScopeResolver::class,
 ```
 
+Manager dùng scoped container binding và resolve default scope lười ở từng operation. Vì vậy cùng một Octane/Swoole/RoadRunner worker có thể chuyển tenant giữa các request mà không giữ scope cũ. `forScope()` luôn trả clone có explicit scope và không mutate manager mặc định.
+
+## Xóa setting
+
+```php
+Setting::forget('general.legacy_key');
+Setting::forget('general.social.facebook');
+Setting::forgetGroup('general');
+```
+
+Xóa nested chỉ bỏ đúng path và giữ sibling; root row được xóa khi cấu trúc còn lại rỗng. Xóa luôn chạy trong transaction, phân tách theo scope và chỉ invalidate cache/phát event sau commit thành công.
+
 ## Events
 
 Sau commit thành công, package phát:
@@ -341,9 +373,13 @@ Sau commit thành công, package phát:
 ```php
 Nhwin\Settings\Events\SettingUpdated::class
 Nhwin\Settings\Events\SettingsGroupUpdated::class
+Nhwin\Settings\Events\SettingDeleted::class
+Nhwin\Settings\Events\SettingsGroupDeleted::class
 ```
 
 Event chứa `scope`, `group`, key thay đổi và old/new value an toàn. Hãy xử lý việc reload mail config, xóa theme cache hoặc tạo sitemap trong listener của ứng dụng, không đặt side effect vào core package.
+
+Audit trail là tùy chọn và không thêm cột vào bảng `settings`. Mặc định `Nhwin\Settings\Contracts\SettingsAuditRecorder` được bind vào recorder no-op. Ứng dụng có thể bind contract này vào implementation riêng để nhận `SettingsAuditEntry`; actor mặc định là `null` và có thể được bổ sung bởi recorder của ứng dụng. Mọi secret trong entry vẫn được redact.
 
 ## Nâng cấp từ phiên bản cũ
 

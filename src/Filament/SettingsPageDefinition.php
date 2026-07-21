@@ -158,7 +158,12 @@ final class SettingsPageDefinition
 
     public function isAccessible(): bool
     {
-        return ($this->access === null || (bool) ($this->access)())
+        return $this->passesAccessCallback()
             && ($this->pageClass === null || $this->pageClass::canAccess());
+    }
+
+    public function passesAccessCallback(): bool
+    {
+        return $this->access === null || (bool) ($this->access)();
     }
 }

@@ -11,6 +11,7 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Concerns\CanUseDatabaseTransactions;
 use Filament\Pages\Concerns\HasUnsavedDataChangesAlert;
 use Filament\Pages\Page;
+use Nhwin\Settings\Definitions\DefinitionRegistry;
 use Nhwin\Settings\Facades\Setting;
 use Nhwin\Settings\Filament\Compatibility\SettingsPageAdapter;
 use Nhwin\Settings\Filament\Plugins\SettingsPlugin;
@@ -37,6 +38,10 @@ abstract class AbstractPageSettings extends Page
 
     public static function canAccess(): bool
     {
+        if (! parent::canAccess() || ! static::canAccessSettingsPage()) {
+            return false;
+        }
+
         $panel = Filament::getCurrentPanel();
 
         if ($panel === null || ! $panel->hasPlugin('settings')) {
@@ -45,7 +50,22 @@ abstract class AbstractPageSettings extends Page
 
         $plugin = $panel->getPlugin('settings');
 
-        return ! $plugin instanceof SettingsPlugin || $plugin->isAccessible();
+        if (! $plugin instanceof SettingsPlugin) {
+            return true;
+        }
+
+        if (! $plugin->isAccessible()) {
+            return false;
+        }
+
+        $definition = $plugin->registry()->findByPage(static::class);
+
+        return $definition === null || $definition->passesAccessCallback();
+    }
+
+    protected static function canAccessSettingsPage(): bool
+    {
+        return true;
     }
 
     abstract protected function settingName(): string;
@@ -71,6 +91,17 @@ abstract class AbstractPageSettings extends Page
             $this->getDefaultData(),
             Setting::getGroup($this->settingName()),
         );
+
+        $definition = app(DefinitionRegistry::class)->get($this->settingName());
+
+        if ($definition !== null) {
+            foreach ($definition->encrypted() as $path) {
+                if (data_get($data, $path) !== null) {
+                    data_set($data, $path, '');
+                }
+            }
+        }
+
         $this->data = $this->mutateFormDataBeforeFill($data);
 
         $this->adapter()->fill($this->settingsForm(), $this->data);

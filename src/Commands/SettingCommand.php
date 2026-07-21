@@ -276,15 +276,20 @@ class SettingCommand extends Command
             return '                //';
         }
 
-        return implode("\n", array_map(
-            fn (array $field): string => sprintf(
-                "                %s::make('%s')->label('%s'),",
+        return implode("\n", array_map(function (array $field) use ($preset): string {
+            $component = sprintf(
+                "                %s::make('%s')->label('%s')",
                 $field['type'],
                 $field['name'],
                 addslashes($field['label']),
-            ),
-            $preset->fields,
-        ));
+            );
+
+            if (in_array($field['name'], $preset->encrypted, true)) {
+                $component .= '->password()->revealable()->dehydrated(fn (?string $state): bool => filled($state))';
+            }
+
+            return $component.',';
+        }, $preset->fields));
     }
 
     protected function hubMetadata(?SettingsPreset $preset): string

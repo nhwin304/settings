@@ -76,6 +76,16 @@ final class DatabaseSettingsRepository implements SettingsRepository
         return $timestamp ? Carbon::parse($timestamp, config('app.timezone', 'UTC')) : null;
     }
 
+    public function forget(string $scope, string $group, string $key): void
+    {
+        $this->query($scope, $group)->where('key', $key)->delete();
+    }
+
+    public function forgetGroup(string $scope, string $group): void
+    {
+        $this->query($scope, $group)->delete();
+    }
+
     private function query(string $scope, string $group): Builder
     {
         return $this->database->table($this->table())

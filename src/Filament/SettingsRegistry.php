@@ -19,15 +19,17 @@ final class SettingsRegistry
                 $definition = $page::settingsPageDefinition();
 
                 if ($definition instanceof SettingsPageDefinition) {
-                    $this->definitions[] = $definition;
+                    $this->addDefinition($definition);
 
                     continue;
                 }
             }
 
-            $this->definitions[] = $page instanceof SettingsPageDefinition
-                ? $page
-                : SettingsPageDefinition::make($page);
+            $this->addDefinition(
+                $page instanceof SettingsPageDefinition
+                    ? $page
+                    : SettingsPageDefinition::make($page),
+            );
         }
 
         usort(
@@ -51,6 +53,18 @@ final class SettingsRegistry
         ));
     }
 
+    /** @param class-string<Page> $pageClass */
+    public function findByPage(string $pageClass): ?SettingsPageDefinition
+    {
+        foreach ($this->definitions as $definition) {
+            if ($definition->pageClass() === $pageClass) {
+                return $definition;
+            }
+        }
+
+        return null;
+    }
+
     /** @return list<class-string<Page>> */
     public function pageClasses(): array
     {
@@ -58,5 +72,19 @@ final class SettingsRegistry
             fn (SettingsPageDefinition $definition): ?string => $definition->pageClass(),
             $this->definitions,
         )));
+    }
+
+    private function addDefinition(SettingsPageDefinition $definition): void
+    {
+        $pageClass = $definition->pageClass();
+
+        if ($pageClass !== null) {
+            $this->definitions = array_values(array_filter(
+                $this->definitions,
+                fn (SettingsPageDefinition $registered): bool => $registered->pageClass() !== $pageClass,
+            ));
+        }
+
+        $this->definitions[] = $definition;
     }
 }

@@ -6,12 +6,19 @@ use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Blade;
 use Nhwin\Settings\Commands\SettingCommand;
 use Nhwin\Settings\Contracts\ScopeResolver;
+use Nhwin\Settings\Contracts\SettingsAuditRecorder;
 use Nhwin\Settings\Contracts\SettingsManagerContract;
 use Nhwin\Settings\Contracts\SettingsRepository;
 use Nhwin\Settings\Definitions\DefinitionRegistry;
 use Nhwin\Settings\Definitions\SettingsDefinition;
+use Nhwin\Settings\Events\SettingDeleted;
+use Nhwin\Settings\Events\SettingsGroupDeleted;
+use Nhwin\Settings\Events\SettingsGroupUpdated;
+use Nhwin\Settings\Events\SettingUpdated;
+use Nhwin\Settings\Listeners\SettingsAuditListener;
 use Nhwin\Settings\Repositories\DatabaseSettingsRepository;
 use Nhwin\Settings\Services\SettingsManager;
+use Nhwin\Settings\Support\NullSettingsAuditRecorder;
 use Nhwin\Settings\Support\SettingsCache;
 use Spatie\LaravelPackageTools\Commands\InstallCommand;
 use Spatie\LaravelPackageTools\Package;
@@ -62,11 +69,19 @@ class SettingServiceProvider extends PackageServiceProvider
         ));
         $this->app->singleton(SettingsRepository::class, DatabaseSettingsRepository::class);
         $this->app->singleton(SettingsCache::class, fn ($app): SettingsCache => new SettingsCache($app['cache']->store()));
-        $this->app->singleton(SettingsManagerContract::class, SettingsManager::class);
+        $this->app->singleton(SettingsAuditRecorder::class, NullSettingsAuditRecorder::class);
+        $this->app->scoped(SettingsManagerContract::class, SettingsManager::class);
     }
 
     public function packageBooted(): void
     {
+        $this->app['events']->listen([
+            SettingUpdated::class,
+            SettingsGroupUpdated::class,
+            SettingDeleted::class,
+            SettingsGroupDeleted::class,
+        ], SettingsAuditListener::class);
+
         // Handle Stubs
         if (app()->runningInConsole()) {
             foreach (app(Filesystem::class)->files(__DIR__.'/../../stubs/') as $file) {

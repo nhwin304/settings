@@ -57,3 +57,21 @@ it('generates preset fields typed definitions and hub metadata', function (): vo
     expect(class_exists(PresetGeneralSettings::class))->toBeTrue()
         ->and(class_exists(PresetGeneralSettingsDefinition::class))->toBeTrue();
 });
+
+it('generates blank preserving password fields for encrypted presets', function (): void {
+    $this->artisan('make:settings', [
+        'name' => 'Mail',
+        '--panel' => 'admin',
+        '--preset' => 'mail',
+        '--typed' => true,
+        '--no-interaction' => true,
+        '--force' => true,
+    ])->assertSuccessful();
+
+    $page = file_get_contents(app_path('Filament/Admin/Pages/MailSettings.php'));
+
+    expect($page)
+        ->toContain("TextInput::make('smtp.password')")
+        ->toContain('->password()->revealable()')
+        ->toContain('->dehydrated(fn (?string $state): bool => filled($state))');
+});
