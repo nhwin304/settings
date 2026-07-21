@@ -8,8 +8,8 @@ Constraint phát hành:
 
 | Thành phần | Phiên bản hỗ trợ |
 | --- | --- |
-| PHP | 8.3+ |
-| Laravel | 11.28+ hoặc 12.x |
+| PHP | 8.3 hoặc 8.4 |
+| Laravel | 11.x, 12.x hoặc 13.x |
 | Filament | 4.x hoặc 5.x |
 | Livewire | 3.x với Filament 4; 4.x với Filament 5 |
 
@@ -22,7 +22,7 @@ Các tổ hợp đã được chạy đầy đủ tại máy phát triển:
 | 8.3.6 | 12.64 | 4.12.1 | 3.8.2 | Composer, Pint, PHPStan và Pest đều đạt |
 | 8.3.6 | 12.64 | 5.7.1 | 4.3.3 | Composer, Pint, PHPStan và Pest đều đạt |
 
-CI còn chạy hai tổ hợp PHP 8.4 + Laravel 12 với Filament 4 và 5. Không cần khai báo trực tiếp Livewire trong ứng dụng; Filament sẽ chọn major phù hợp.
+CI chạy đủ ma trận PHP 8.3/8.4, Laravel 11/12/13 và Filament 4/5. Không cần khai báo trực tiếp Livewire trong ứng dụng; Filament sẽ chọn major phù hợp.
 
 ## Cài đặt
 
@@ -383,7 +383,7 @@ Audit trail là tùy chọn và không thêm cột vào bảng `settings`. Mặc
 
 ## Nâng cấp từ phiên bản cũ
 
-1. Nâng PHP lên 8.3+ và chọn Laravel 11.28+/12.
+1. Dùng PHP 8.3 hoặc 8.4 và chọn Laravel 11/12/13 tương thích.
 2. Chạy `composer update nhwin/settings filament/filament --with-all-dependencies`.
 3. Publish migration mới và chạy `php artisan migrate`. Migration thêm `scope = global` cho dữ liệu hiện hữu và đổi unique key thành `(scope, group, key)`.
 4. Không cần đổi `settings()`, facade `Setting`, `@settings`, `getGroup()` hoặc `getGroupLastUpdatedAt()`.
@@ -403,7 +403,7 @@ composer test
 composer check
 ```
 
-CI chạy ma trận PHP 8.3/8.4, Laravel 11/12 và Filament 4/5. Filament 5 được ghép với Livewire 4.1+ trong job tương ứng.
+CI chạy đủ ma trận PHP 8.3/8.4, Laravel 11/12/13 và Filament 4/5. Filament 5 được ghép với Livewire 4.1+ trong job tương ứng.
 
 ## Giấy phép
 

@@ -18,14 +18,14 @@
     ],
     "require": {
         "php": "^8.3",
-        "laravel/framework": "^11.28|^12.0",
+        "laravel/framework": "^11.0|^12.0|^13.0",
         "filament/filament": "^4.0|^5.0",
         "spatie/laravel-package-tools": "^1.92"
     },
     "require-dev": {
         "laravel/pint": "^1.14",
         "pestphp/pest": "^3.8|^4.0",
-        "orchestra/testbench": "^9.0|^10.0",
+        "orchestra/testbench": "^9.0|^10.0|^11.0",
         "phpstan/phpstan": "^2.1"
     },
     "autoload": {
