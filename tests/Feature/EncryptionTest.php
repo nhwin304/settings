@@ -48,3 +48,24 @@ it('redacts encrypted values from committed domain events', function (): void {
     );
     Event::assertDispatched(SettingsGroupUpdated::class);
 });
+
+it('recursively redacts multiple secrets while preserving non-secret event context', function (): void {
+    Event::fake([SettingUpdated::class, SettingsGroupUpdated::class]);
+    Setting::set('mail.smtp.host', 'smtp.example.test');
+    Setting::setEncrypted('mail.smtp.password', 'first-secret');
+    Setting::setEncrypted('mail.smtp.auth.token', 'second-secret');
+
+    Setting::set('mail.smtp.port', 587);
+
+    Event::assertDispatched(SettingUpdated::class);
+    $event = Event::dispatched(SettingUpdated::class)->last()[0];
+
+    expect($event)->toBeInstanceOf(SettingUpdated::class)
+        ->and($event->key)->toBe('smtp')
+        ->and($event->newValue)->toBeArray()
+        ->and(data_get($event->newValue, 'host'))->toBe('smtp.example.test')
+        ->and(data_get($event->newValue, 'password'))->toBe('[encrypted]')
+        ->and(data_get($event->newValue, 'auth.token'))->toBe('[encrypted]')
+        ->and(data_get($event->newValue, 'port'))->toBe(587)
+        ->and(serialize($event))->not->toContain('first-secret', 'second-secret');
+});

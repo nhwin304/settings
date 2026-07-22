@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Nhwin\Settings\Filament;
 
-use Filament\Pages\Page;
+use Nhwin\Settings\Abstracts\AbstractPageSettings;
 
 final class SettingsRegistry
 {
     /** @var list<SettingsPageDefinition> */
     private array $definitions = [];
 
-    /** @param array<class-string<Page>|SettingsPageDefinition> $pages */
+    /** @param array<class-string<AbstractPageSettings>|SettingsPageDefinition> $pages */
     public function add(array $pages): void
     {
         foreach ($pages as $page) {
@@ -53,7 +53,7 @@ final class SettingsRegistry
         ));
     }
 
-    /** @param class-string<Page> $pageClass */
+    /** @param class-string<AbstractPageSettings> $pageClass */
     public function findByPage(string $pageClass): ?SettingsPageDefinition
     {
         foreach ($this->definitions as $definition) {
@@ -65,7 +65,7 @@ final class SettingsRegistry
         return null;
     }
 
-    /** @return list<class-string<Page>> */
+    /** @return list<class-string<AbstractPageSettings>> */
     public function pageClasses(): array
     {
         return array_values(array_filter(array_map(

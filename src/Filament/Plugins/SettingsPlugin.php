@@ -6,8 +6,8 @@ namespace Nhwin\Settings\Filament\Plugins;
 
 use Closure;
 use Filament\Contracts\Plugin;
-use Filament\Pages\Page;
 use Filament\Panel;
+use Nhwin\Settings\Abstracts\AbstractPageSettings;
 use Nhwin\Settings\Filament\Pages\SettingsHub;
 use Nhwin\Settings\Filament\SettingsPageDefinition;
 use Nhwin\Settings\Filament\SettingsRegistry;
@@ -41,7 +41,7 @@ class SettingsPlugin implements Plugin
         return 'settings';
     }
 
-    /** @param array<class-string<Page>|SettingsPageDefinition> $pages */
+    /** @param array<class-string<AbstractPageSettings>|SettingsPageDefinition> $pages */
     public function pages(array $pages): static
     {
         $this->registry->add($pages);

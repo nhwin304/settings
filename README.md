@@ -8,8 +8,8 @@ Constraint phát hành:
 
 | Thành phần | Phiên bản hỗ trợ |
 | --- | --- |
-| PHP | 8.3 hoặc 8.4 |
-| Laravel | 11.x, 12.x hoặc 13.x |
+| PHP | 8.3+ |
+| Laravel | 11.28+, 12.x hoặc 13.x |
 | Filament | 4.x hoặc 5.x |
 | Livewire | 3.x với Filament 4; 4.x với Filament 5 |
 
@@ -17,12 +17,14 @@ Các tổ hợp đã được chạy đầy đủ tại máy phát triển:
 
 | PHP | Laravel | Filament | Livewire | Kết quả |
 | --- | --- | --- | --- | --- |
-| 8.3.6 | 11.55 | 4.12.1 | 3.8.2 | Composer, Pint, PHPStan và Pest đều đạt |
-| 8.3.6 | 11.55 | 5.7.1 | 4.3.3 | Composer, Pint, PHPStan và Pest đều đạt |
-| 8.3.6 | 12.64 | 4.12.1 | 3.8.2 | Composer, Pint, PHPStan và Pest đều đạt |
-| 8.3.6 | 12.64 | 5.7.1 | 4.3.3 | Composer, Pint, PHPStan và Pest đều đạt |
+| 8.3.6 | 11.39.1 | 4.0.0 | 3.5.0 | `prefer-lowest`, Composer, Pint, PHPStan và Pest đều đạt |
+| 8.3.6 | 11.39.1 | 5.0.0 | 4.1.0 | `prefer-lowest`, Composer, Pint, PHPStan và Pest đều đạt |
+| 8.3.6 | 12.64.0 | 4.12.1 | 3.8.2 | Composer, Pint, PHPStan và Pest đều đạt |
+| 8.3.6 | 12.64.0 | 5.7.1 | 4.3.3 | Composer, Pint, PHPStan và Pest đều đạt |
+| 8.3.6 | 13.21.1 | 4.12.1 | 3.8.2 | Composer, Pint, PHPStan và Pest đều đạt |
+| 8.3.6 | 13.21.1 | 5.7.1 | 4.3.3 | Composer, Pint, PHPStan và Pest đều đạt |
 
-CI chạy đủ ma trận PHP 8.3/8.4, Laravel 11/12/13 và Filament 4/5. Không cần khai báo trực tiếp Livewire trong ứng dụng; Filament sẽ chọn major phù hợp.
+Constraint Composer cho phép PHP 8.3 trở lên. Workflow CI hiện cấu hình PHP 8.3/8.4; chỉ các tổ hợp liệt kê trong bảng trên mới được xác minh đầy đủ tại máy phát triển. Workflow còn có các job `prefer-lowest` riêng cho lower bound Laravel 11.28 với Filament 4/5. Không cần khai báo trực tiếp Livewire trong ứng dụng; Filament sẽ chọn major phù hợp.
 
 ## Cài đặt
 
@@ -101,6 +103,11 @@ $github = Setting::get('general.social.github'); // vẫn được giữ nguyên
 
 Giá trị `null` đã lưu sẽ trả về `null`; default chỉ được dùng khi đường dẫn không tồn tại.
 
+Database repository mặc định thực hiện nested read-modify-write trong transaction và khóa root row,
+nên sibling mutations dựa trên state committed mới nhất. Custom repository chỉ implement
+`SettingsRepository` vẫn tương thích và dùng fallback cũ; implement thêm
+`AtomicSettingsRepository` để cung cấp cùng bảo đảm concurrency.
+
 ## Ghi hàng loạt
 
 `setMany()` thực hiện một transaction, một lần `upsert()` cho cả group và một lần xóa cache sau commit:
@@ -153,6 +160,11 @@ Nếu kiểu đã lưu không đúng, package ném `Nhwin\Settings\Exceptions\In
 `float()` nhận số JSON kiểu integer hoặc float rồi luôn trả về `float`; chuỗi số như `"5.5"` bị từ chối. Boolean cast trong definition nhận `true`, `false`, `1`, `0` và các chuỗi không phân biệt hoa thường `"1"`, `"0"`, `"true"`, `"false"`, `"yes"`, `"no"`, `"on"`, `"off"`; giá trị mơ hồ bị từ chối.
 
 ## Definition tùy chọn
+
+Definition casts chuẩn hóa và kiểm tra kiểu của giá trị group đã lưu: string chỉ nhận string,
+integer chỉ nhận int, float nhận int/float rồi trả float, boolean dùng tập biểu diễn rõ ràng,
+và array chỉ nhận array. Typed getters kiểm tra kiểu tại thời điểm application code yêu cầu
+một kiểu cụ thể; chúng không thay thế definition normalization.
 
 Settings động vẫn là mặc định. Khi cần default, cast và danh sách mã hóa, tạo definition:
 
@@ -209,7 +221,7 @@ DB chỉ chứa ciphertext. Với path được khai báo trong `SettingsDefinit
 - Gửi plaintext mới: mã hóa một lần và thay thế secret.
 - Xóa có chủ đích: dùng `Setting::clearEncrypted('mail.smtp.password')` để clear thành `null`, hoặc `Setting::forget('mail.smtp.password')` để xóa path.
 
-Form Filament được fill bằng giá trị trống thay vì plaintext secret; password field do generator tạo chỉ dehydrate khi có input mới. Payload hỏng sẽ ném `DecryptException`; events và audit entries luôn thay secret bằng `[encrypted]`.
+Form Filament được fill bằng giá trị trống thay vì plaintext secret; password field do generator tạo chỉ dehydrate khi có input mới. Payload hỏng sẽ ném `DecryptException`; events và audit entries thay đệ quy từng secret bằng `[encrypted]` nhưng vẫn giữ các sibling không nhạy cảm.
 
 ## Tạo trang Filament
 
@@ -240,7 +252,7 @@ php artisan make:settings General \
 - `--force`: cho phép ghi đè file đã có.
 - `--no-interaction`: dùng trong CI; bắt buộc truyền tên page.
 
-Page sinh ra tương thích Filament 4/5 và kế thừa `AbstractPageSettings`. Base page hỗ trợ `beforeFill`, `afterFill`, `beforeValidate`, `afterValidate`, `beforeSave`, `afterSave`, hai hook mutate, transaction, unsaved-change alert và phím `Ctrl/Cmd + S`.
+Page sinh ra tương thích Filament 4/5 và kế thừa `AbstractPageSettings`. Base page hỗ trợ `beforeFill`, `afterFill`, `beforeValidate`, `afterValidate`, `beforeSave`, `afterSave`, `afterCommit`, hai hook mutate, transaction, unsaved-change alert và phím `Ctrl/Cmd + S`. `afterSave` chạy bên trong transaction; `afterCommit` chạy sau commit và có thể đọc state đã commit.
 
 ```php
 protected function mutateFormDataBeforeSave(array $data): array
@@ -252,6 +264,10 @@ protected function mutateFormDataBeforeSave(array $data): array
 ```
 
 ## Settings Hub
+
+Internal pages passed to `pages()` or `SettingsPageDefinition::make()` must extend
+`AbstractPageSettings`, so plugin, definition, and direct-route authorization are always applied.
+Use `SettingsPageDefinition::external()` for destinations whose authorization is managed elsewhere.
 
 Đăng ký plugin trong Panel Provider:
 
@@ -379,11 +395,13 @@ Nhwin\Settings\Events\SettingsGroupDeleted::class
 
 Event chứa `scope`, `group`, key thay đổi và old/new value an toàn. Hãy xử lý việc reload mail config, xóa theme cache hoặc tạo sitemap trong listener của ứng dụng, không đặt side effect vào core package.
 
-Audit trail là tùy chọn và không thêm cột vào bảng `settings`. Mặc định `Nhwin\Settings\Contracts\SettingsAuditRecorder` được bind vào recorder no-op. Ứng dụng có thể bind contract này vào implementation riêng để nhận `SettingsAuditEntry`; actor mặc định là `null` và có thể được bổ sung bởi recorder của ứng dụng. Mọi secret trong entry vẫn được redact.
+Các identifier `scope`, `group` và root key phải khác rỗng, không chứa control character và tối đa 255 ký tự để khớp các cột `string` hiện tại; `group`/root key không nhận dấu chấm vì dấu chấm dành cho phân tách setting path. Mỗi nested segment có cùng giới hạn và toàn bộ setting key tối đa 1024 ký tự.
+
+Audit trail là tùy chọn và không thêm cột vào bảng `settings`. Mặc định `Nhwin\Settings\Contracts\SettingsAuditRecorder` được bind vào recorder no-op. Ứng dụng có thể bind contract này vào implementation riêng để nhận `SettingsAuditEntry`; actor mặc định là `null` và có thể được bổ sung bởi recorder của ứng dụng. `settings.audit.granularity` nhận `setting` (mặc định, tránh record trùng khi bulk update), `group` hoặc `both`. Mọi secret trong entry vẫn được redact.
 
 ## Nâng cấp từ phiên bản cũ
 
-1. Dùng PHP 8.3 hoặc 8.4 và chọn Laravel 11/12/13 tương thích.
+1. Dùng PHP 8.3+ và chọn Laravel 11/12/13 tương thích.
 2. Chạy `composer update nhwin/settings filament/filament --with-all-dependencies`.
 3. Publish migration mới và chạy `php artisan migrate`. Migration thêm `scope = global` cho dữ liệu hiện hữu và đổi unique key thành `(scope, group, key)`.
 4. Không cần đổi `settings()`, facade `Setting`, `@settings`, `getGroup()` hoặc `getGroupLastUpdatedAt()`.
@@ -403,7 +421,7 @@ composer test
 composer check
 ```
 
-CI chạy đủ ma trận PHP 8.3/8.4, Laravel 11/12/13 và Filament 4/5. Filament 5 được ghép với Livewire 4.1+ trong job tương ứng.
+CI được cấu hình cho ma trận PHP 8.3/8.4, Laravel 11/12/13 và Filament 4/5. Filament 5 được ghép với Livewire 4.1+ trong job tương ứng. Cấu hình workflow không được xem là bằng chứng một tổ hợp đã pass nếu chưa có lần chạy thành công.
 
 ## Giấy phép
 

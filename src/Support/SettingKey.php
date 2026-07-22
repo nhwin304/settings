@@ -16,7 +16,8 @@ final readonly class SettingKey
 
     public static function parse(string $key): self
     {
-        $segments = explode('.', trim($key));
+        $key = SettingIdentifier::settingKey(trim($key));
+        $segments = explode('.', $key);
 
         if (count($segments) < 2 || in_array('', $segments, true)) {
             throw new InvalidArgumentException(
@@ -26,6 +27,13 @@ final readonly class SettingKey
 
         $group = array_shift($segments);
         $root = array_shift($segments);
+
+        SettingIdentifier::group($group);
+        SettingIdentifier::root($root);
+
+        foreach ($segments as $segment) {
+            SettingIdentifier::nestedSegment($segment);
+        }
 
         return new self($group, $root, $segments === [] ? null : implode('.', $segments));
     }

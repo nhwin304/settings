@@ -16,4 +16,14 @@ it('parses root and nested setting keys', function (string $key, string $group, 
 
 it('rejects malformed setting keys', function (string $key): void {
     SettingKey::parse($key);
-})->with(['general', '.name', 'general.', 'general..name'])->throws(InvalidArgumentException::class);
+})->with([
+    'missing root' => 'general',
+    'empty group' => '.name',
+    'empty root' => 'general.',
+    'empty nested segment' => 'general..name',
+    'control character' => "general.site\nname",
+    'long group' => str_repeat('g', 256).'.name',
+    'long root' => 'general.'.str_repeat('k', 256),
+    'long nested segment' => 'general.root.'.str_repeat('n', 256),
+    'long full path' => 'general.root.'.implode('.', array_fill(0, 5, str_repeat('n', 210))),
+])->throws(InvalidArgumentException::class);

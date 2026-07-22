@@ -5,6 +5,7 @@ use Filament\FilamentManager;
 use Filament\Panel;
 use Nhwin\Settings\Filament\Plugins\SettingsPlugin;
 use Nhwin\Settings\Filament\SettingsPageDefinition;
+use Nhwin\Settings\Tests\Fixtures\GenericFilamentPage;
 use Nhwin\Settings\Tests\Fixtures\OtherSettingsPage;
 use Nhwin\Settings\Tests\Fixtures\RestrictedSettingsPage;
 use Nhwin\Settings\Tests\Fixtures\TestSettingsPage;
@@ -49,6 +50,11 @@ it('filters inaccessible hub destinations', function (): void {
 
     expect($plugin->registry()->accessible())->toHaveCount(1)
         ->and($plugin->registry()->accessible()[0]->getLabel())->toBe('Allowed');
+});
+
+it('rejects generic Filament pages from protected internal registration', function (): void {
+    expect(fn () => SettingsPlugin::make()->pages([GenericFilamentPage::class]))
+        ->toThrow(InvalidArgumentException::class, 'must extend');
 });
 
 it('blocks every settings page when plugin access is denied', function (): void {

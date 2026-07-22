@@ -32,5 +32,31 @@ it('runs the native fill and bulk save lifecycle', function (): void {
             'afterValidate',
             'beforeSave',
             'afterSave',
+            'afterCommit',
         ]);
+});
+
+it('runs afterCommit outside the transaction with committed settings available', function (): void {
+    Setting::set('general.site_name', 'Before');
+    $page = new TestSettingsPage;
+    $page->testForm = new FakeSettingsForm(['site_name' => 'After']);
+
+    $page->save();
+
+    expect($page->transactionLevels['afterSave'])->toBeGreaterThan(0)
+        ->and($page->transactionLevels['afterCommit'])->toBe(0)
+        ->and($page->afterCommitSiteName)->toBe('After');
+});
+
+it('does not run afterCommit when the page transaction rolls back', function (): void {
+    Setting::set('general.site_name', 'Before');
+    $page = new TestSettingsPage;
+    $page->testForm = new FakeSettingsForm(['site_name' => 'After']);
+    $page->failAfterSave = true;
+
+    expect(fn () => $page->save())->toThrow(RuntimeException::class, 'Rollback requested');
+
+    expect($page->hooks)->toContain('afterSave')
+        ->not->toContain('afterCommit')
+        ->and(Setting::get('general.site_name'))->toBe('Before');
 });

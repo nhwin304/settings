@@ -9,11 +9,12 @@ use Carbon\CarbonInterface;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\Query\Builder;
 use JsonException;
+use Nhwin\Settings\Contracts\AtomicSettingsRepository;
 use Nhwin\Settings\Contracts\SettingsRepository;
 use RuntimeException;
 use stdClass;
 
-final class DatabaseSettingsRepository implements SettingsRepository
+final class DatabaseSettingsRepository implements AtomicSettingsRepository, SettingsRepository
 {
     public function __construct(private DatabaseManager $database) {}
 
@@ -67,6 +68,44 @@ final class DatabaseSettingsRepository implements SettingsRepository
             ['scope', 'group', 'key'],
             ['value', 'updated_at'],
         );
+    }
+
+    public function mutate(
+        string $scope,
+        string $group,
+        string $key,
+        \Closure $callback,
+    ): mixed {
+        return $this->database->transaction(function () use ($scope, $group, $key, $callback): mixed {
+            $now = now();
+
+            $this->database->table($this->table())->insertOrIgnore([
+                'scope' => $scope,
+                'group' => $group,
+                'key' => $key,
+                'value' => 'null',
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+            $setting = $this->query($scope, $group)
+                ->where('key', $key)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $setting instanceof stdClass || ! is_string($setting->value)) {
+                throw new RuntimeException("Unable to lock setting '{$group}.{$key}' for mutation.");
+            }
+
+            $current = json_decode($setting->value, true, 512, JSON_THROW_ON_ERROR);
+            $next = $callback($current);
+
+            if ($next !== $current) {
+                $this->setMany($scope, $group, [$key => $next]);
+            }
+
+            return $next;
+        });
     }
 
     public function lastUpdatedAt(string $scope, string $group): ?CarbonInterface

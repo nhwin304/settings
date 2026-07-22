@@ -85,6 +85,21 @@ it('redacts encrypted values from deletion events', function (): void {
     );
 });
 
+it('recursively redacts group deletion values while preserving safe siblings', function (): void {
+    Event::fake([SettingsGroupDeleted::class]);
+    Setting::set('mail.smtp.host', 'smtp.example.test');
+    Setting::setEncrypted('mail.smtp.password', 'delete-secret');
+
+    Setting::forgetGroup('mail');
+
+    Event::assertDispatched(SettingsGroupDeleted::class, fn (SettingsGroupDeleted $event): bool => $event->oldValues === [
+        'smtp' => [
+            'host' => 'smtp.example.test',
+            'password' => '[encrypted]',
+        ],
+    ] && ! str_contains(serialize($event), 'delete-secret'));
+});
+
 it('keeps cache intact when a delete transaction fails', function (): void {
     Setting::set('general.legacy', 'keep');
     expect(Setting::get('general.legacy'))->toBe('keep')

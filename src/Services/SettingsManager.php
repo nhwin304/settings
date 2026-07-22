@@ -8,6 +8,7 @@ use Illuminate\Contracts\Encryption\Encrypter;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Support\Collection;
+use Nhwin\Settings\Contracts\AtomicSettingsRepository;
 use Nhwin\Settings\Contracts\ScopeResolver;
 use Nhwin\Settings\Contracts\SettingsManagerContract;
 use Nhwin\Settings\Contracts\SettingsRepository;
@@ -18,6 +19,7 @@ use Nhwin\Settings\Events\SettingsGroupUpdated;
 use Nhwin\Settings\Events\SettingUpdated;
 use Nhwin\Settings\Exceptions\InvalidSettingType;
 use Nhwin\Settings\Support\BooleanCaster;
+use Nhwin\Settings\Support\SettingIdentifier;
 use Nhwin\Settings\Support\SettingKey;
 use Nhwin\Settings\Support\SettingsCache;
 
@@ -42,7 +44,7 @@ class SettingsManager implements SettingsManagerContract
     public function forScope(string $scope): static
     {
         $manager = clone $this;
-        $manager->explicitScope = $scope;
+        $manager->explicitScope = SettingIdentifier::scope($scope);
 
         return $manager;
     }
@@ -66,14 +68,7 @@ class SettingsManager implements SettingsManagerContract
             return;
         }
 
-        $root = $this->rawGroup($parsed->group)[$parsed->root] ?? [];
-
-        if (! is_array($root)) {
-            $root = [];
-        }
-
-        data_set($root, $parsed->nestedPath, $value);
-        $this->setMany($parsed->group, [$parsed->root => $root]);
+        $this->setNested($parsed, $value, applyDefinitionEncryption: true);
     }
 
     public function setEncrypted(string $key, mixed $value): void
@@ -148,6 +143,7 @@ class SettingsManager implements SettingsManagerContract
 
     public function forgetGroup(string $group): void
     {
+        SettingIdentifier::group($group);
         $scope = $this->currentScope();
         $oldGroup = $this->rawGroup($group);
 
@@ -174,6 +170,12 @@ class SettingsManager implements SettingsManagerContract
 
     public function setMany(string $group, array $values): void
     {
+        SettingIdentifier::group($group);
+
+        foreach (array_keys($values) as $root) {
+            SettingIdentifier::root($root);
+        }
+
         $definition = $this->definitions->get($group);
 
         if ($definition !== null) {
@@ -217,6 +219,7 @@ class SettingsManager implements SettingsManagerContract
 
     public function getGroup(string $group): array
     {
+        SettingIdentifier::group($group);
         $values = $this->decrypt($this->rawGroup($group));
         $definition = $this->definitions->get($group);
 
@@ -234,13 +237,7 @@ class SettingsManager implements SettingsManagerContract
                 continue;
             }
 
-            data_set($values, $path, match ($cast) {
-                'string' => (string) $value,
-                'integer' => (int) $value,
-                'float' => (float) $value,
-                'boolean' => BooleanCaster::cast("{$group}.{$path}", $value),
-                'array' => (array) $value,
-            });
+            data_set($values, $path, $this->castDefinitionValue($group, $path, $cast, $value));
         }
 
         return $values;
@@ -251,6 +248,7 @@ class SettingsManager implements SettingsManagerContract
         string $format = 'H:i:s d/m/Y',
         ?string $timezone = null,
     ): ?string {
+        SettingIdentifier::group($group);
         $updatedAt = $this->repository->lastUpdatedAt($this->currentScope(), $group);
 
         if ($updatedAt === null) {
@@ -309,6 +307,7 @@ class SettingsManager implements SettingsManagerContract
     /** @return array<string, mixed> */
     protected function rawGroup(string $group): array
     {
+        SettingIdentifier::group($group);
         $scope = $this->currentScope();
 
         return $this->cache->remember(
@@ -326,14 +325,105 @@ class SettingsManager implements SettingsManagerContract
             return;
         }
 
-        $root = $this->rawGroup($parsed->group)[$parsed->root] ?? [];
+        $this->setNested($parsed, $value, applyDefinitionEncryption: false);
+    }
 
-        if (! is_array($root)) {
-            $root = [];
+    private function setNested(
+        SettingKey $parsed,
+        mixed $value,
+        bool $applyDefinitionEncryption,
+    ): void {
+        if (! $this->repository instanceof AtomicSettingsRepository) {
+            $root = $this->rawGroup($parsed->group)[$parsed->root] ?? [];
+
+            if (! is_array($root)) {
+                $root = [];
+            }
+
+            data_set($root, (string) $parsed->nestedPath, $value);
+
+            if ($applyDefinitionEncryption) {
+                $this->setMany($parsed->group, [$parsed->root => $root]);
+            } else {
+                $this->persistMany($parsed->group, [$parsed->root => $root]);
+            }
+
+            return;
         }
 
-        data_set($root, $parsed->nestedPath, $value);
-        $this->persistMany($parsed->group, [$parsed->root => $root]);
+        $scope = $this->currentScope();
+        $oldRoot = null;
+        $newRoot = $this->repository->mutate(
+            $scope,
+            $parsed->group,
+            $parsed->root,
+            function (mixed $current) use ($parsed, $value, $applyDefinitionEncryption, &$oldRoot): array {
+                $oldRoot = $current;
+                $root = is_array($current) ? $current : [];
+                $nestedValue = $value;
+
+                if ($applyDefinitionEncryption) {
+                    $nestedValue = $this->prepareDefinedEncryptedValue($parsed, $root, $value);
+                }
+
+                data_set($root, (string) $parsed->nestedPath, $nestedValue);
+
+                return $root;
+            },
+        );
+
+        if ($newRoot === $oldRoot) {
+            return;
+        }
+
+        $oldValue = $this->safeEventValue($oldRoot);
+        $newValue = $this->safeEventValue($newRoot);
+
+        $this->database->afterCommit(function () use ($scope, $parsed, $oldValue, $newValue): void {
+            $this->cache->forget($scope, $parsed->group);
+            $this->events->dispatch(new SettingUpdated(
+                $scope,
+                $parsed->group,
+                $parsed->root,
+                $oldValue,
+                $newValue,
+            ));
+            $this->events->dispatch(new SettingsGroupUpdated(
+                $scope,
+                $parsed->group,
+                [$parsed->root],
+                [$parsed->root => $oldValue],
+                [$parsed->root => $newValue],
+            ));
+        });
+    }
+
+    /** @param array<array-key, mixed> $root */
+    private function prepareDefinedEncryptedValue(SettingKey $parsed, array $root, mixed $value): mixed
+    {
+        $definition = $this->definitions->get($parsed->group);
+        $path = $parsed->root.'.'.$parsed->nestedPath;
+
+        if ($definition === null || ! in_array($path, $definition->encrypted(), true)) {
+            return $value;
+        }
+
+        $missing = new \stdClass;
+        $stored = data_get($root, (string) $parsed->nestedPath, $missing);
+
+        if ($this->isBlankSecret($value)) {
+            return $stored === $missing ? $value : $stored;
+        }
+
+        if ($this->isEncrypted($value)) {
+            return $value;
+        }
+
+        if ($stored !== $missing && $this->isEncrypted($stored) && $this->decrypt($stored) === $value) {
+            return $stored;
+        }
+
+        return $this->encrypt($value);
     }
 
     /** @param array<string, mixed> $values */
@@ -404,7 +494,7 @@ class SettingsManager implements SettingsManagerContract
 
     protected function currentScope(): string
     {
-        return $this->explicitScope ?? $this->scopeResolver->resolve();
+        return SettingIdentifier::scope($this->explicitScope ?? $this->scopeResolver->resolve());
     }
 
     private function deleteRoot(
@@ -438,6 +528,28 @@ class SettingsManager implements SettingsManagerContract
         }
 
         return $value;
+    }
+
+    /** @param 'string'|'integer'|'float'|'boolean'|'array' $cast */
+    private function castDefinitionValue(string $group, string $path, string $cast, mixed $value): mixed
+    {
+        $key = "{$group}.{$path}";
+
+        return match ($cast) {
+            'string' => is_string($value)
+                ? $value
+                : throw InvalidSettingType::forKey($key, 'string', $value),
+            'integer' => is_int($value)
+                ? $value
+                : throw InvalidSettingType::forKey($key, 'integer', $value),
+            'float' => is_int($value) || is_float($value)
+                ? (float) $value
+                : throw InvalidSettingType::forKey($key, 'float', $value),
+            'boolean' => BooleanCaster::cast($key, $value),
+            'array' => is_array($value)
+                ? $value
+                : throw InvalidSettingType::forKey($key, 'array', $value),
+        };
     }
 
     /** @return array{__nhwin_encrypted: string} */
@@ -478,29 +590,23 @@ class SettingsManager implements SettingsManagerContract
 
     private function safeEventValue(mixed $value): mixed
     {
-        if ($this->containsEncryptedValue($value)) {
+        return $this->redactEncryptedValues($value);
+    }
+
+    private function redactEncryptedValues(mixed $value): mixed
+    {
+        if ($this->isEncrypted($value)) {
             return self::REDACTED;
         }
 
-        return $this->decrypt($value);
-    }
-
-    private function containsEncryptedValue(mixed $value): bool
-    {
-        if ($this->isEncrypted($value)) {
-            return true;
-        }
-
         if (! is_array($value)) {
-            return false;
+            return $value;
         }
 
-        foreach ($value as $nested) {
-            if ($this->containsEncryptedValue($nested)) {
-                return true;
-            }
+        foreach ($value as $key => $nested) {
+            $value[$key] = $this->redactEncryptedValues($nested);
         }
 
-        return false;
+        return $value;
     }
 }

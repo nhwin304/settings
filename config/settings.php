@@ -33,6 +33,11 @@ return [
         'ttl' => null, // Cache forever by default
     ],
 
+    /* Audit individual setting events, group events, or both. */
+    'audit' => [
+        'granularity' => 'setting',
+    ],
+
     /* Optional SettingsDefinition classes keyed by their static group(). */
     'definitions' => [],
 

@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace Nhwin\Settings\Filament;
 
 use Closure;
-use Filament\Pages\Page;
+use InvalidArgumentException;
+use Nhwin\Settings\Abstracts\AbstractPageSettings;
 
 final class SettingsPageDefinition
 {
-    /** @var class-string<Page>|null */
+    /** @var class-string<AbstractPageSettings>|null */
     private ?string $pageClass;
 
     private ?string $label = null;
@@ -28,15 +29,17 @@ final class SettingsPageDefinition
 
     private ?Closure $access = null;
 
-    /** @param class-string<Page>|null $pageClass */
+    /** @param class-string<AbstractPageSettings>|null $pageClass */
     private function __construct(?string $pageClass)
     {
         $this->pageClass = $pageClass;
     }
 
-    /** @param class-string<Page> $pageClass */
+    /** @param class-string<AbstractPageSettings> $pageClass */
     public static function make(string $pageClass): self
     {
+        self::ensureProtectedPageClass($pageClass);
+
         return new self($pageClass);
     }
 
@@ -101,7 +104,7 @@ final class SettingsPageDefinition
         return $this;
     }
 
-    /** @return class-string<Page>|null */
+    /** @return class-string<AbstractPageSettings>|null */
     public function pageClass(): ?string
     {
         return $this->pageClass;
@@ -165,5 +168,18 @@ final class SettingsPageDefinition
     public function passesAccessCallback(): bool
     {
         return $this->access === null || (bool) ($this->access)();
+    }
+
+    private static function ensureProtectedPageClass(string $pageClass): void
+    {
+        if (is_a($pageClass, AbstractPageSettings::class, true)) {
+            return;
+        }
+
+        throw new InvalidArgumentException(sprintf(
+            'Internal settings page [%s] must extend [%s]. Use SettingsPageDefinition::external() for externally protected destinations.',
+            $pageClass,
+            AbstractPageSettings::class,
+        ));
     }
 }

@@ -6,6 +6,7 @@ use Nhwin\Settings\Events\SettingsGroupUpdated;
 use Nhwin\Settings\Events\SettingUpdated;
 use Nhwin\Settings\Exceptions\InvalidSettingType;
 use Nhwin\Settings\Facades\Setting;
+use Nhwin\Settings\Tests\Fixtures\CastingSettingsDefinition;
 use Nhwin\Settings\Tests\Fixtures\FakeSettingsForm;
 use Nhwin\Settings\Tests\Fixtures\GeneralSettingsDefinition;
 use Nhwin\Settings\Tests\Fixtures\TestSettingsPage;
@@ -21,7 +22,7 @@ it('applies optional defaults casts and definition encryption', function (): voi
     ]);
 
     Setting::setMany('general', [
-        'site_name' => 304,
+        'site_name' => '304',
         'maintenance' => 1,
         'api' => ['token' => 'definition-secret'],
     ]);
@@ -86,8 +87,8 @@ it('replaces a changed secret once and redacts its events', function (): void {
     expect($after)->not->toBe($before)
         ->and($after)->not->toContain('new-secret')
         ->and(Setting::get('general.api.token'))->toBe('new-secret');
-    Event::assertDispatched(SettingUpdated::class, fn (SettingUpdated $event): bool => $event->oldValue === '[encrypted]'
-        && $event->newValue === '[encrypted]'
+    Event::assertDispatched(SettingUpdated::class, fn (SettingUpdated $event): bool => $event->oldValue === ['token' => '[encrypted]']
+        && $event->newValue === ['token' => '[encrypted]']
     );
     Event::assertDispatchedTimes(SettingUpdated::class, 2);
 });
@@ -116,6 +117,27 @@ it('does not fill a settings form with decrypted secrets', function (): void {
     expect($page->testForm->state)
         ->toMatchArray(['site_name' => 'Site', 'api' => ['token' => '']])
         ->not->toContain('form-secret');
+});
+
+it('removes plaintext secrets from public and form state after save', function (): void {
+    $page = new TestSettingsPage;
+    $page->testForm = new FakeSettingsForm;
+    $page->mount();
+    $page->testForm->state = [
+        'site_name' => 'Site',
+        'api' => ['token' => 'browser-secret'],
+    ];
+
+    $page->save();
+
+    $stored = DB::table('settings')->where('group', 'general')->where('key', 'api')->value('value');
+
+    expect($stored)->not->toContain('browser-secret')
+        ->and(Setting::get('general.api.token'))->toBe('browser-secret')
+        ->and($page->data)->toMatchArray(['api' => ['token' => '']])
+        ->and($page->data)->not->toContain('browser-secret')
+        ->and($page->testForm->state)->toMatchArray(['api' => ['token' => '']])
+        ->and($page->testForm->state)->not->toContain('browser-secret');
 });
 
 it('casts supported boolean representations deterministically', function (mixed $stored, bool $expected): void {
@@ -152,3 +174,49 @@ it('rejects ambiguous boolean casts without including the stored value', functio
 
     $this->fail('An invalid boolean cast did not throw an exception.');
 });
+
+it('normalizes every supported definition cast without permissive coercion', function (): void {
+    config()->set('settings.definitions', [CastingSettingsDefinition::class]);
+    Setting::setMany('casting', [
+        'string_value' => '304',
+        'integer_value' => 304,
+        'float_value' => 304,
+        'boolean_value' => 'yes',
+        'array_value' => ['valid'],
+    ]);
+
+    expect(Setting::getGroup('casting'))->toMatchArray([
+        'string_value' => '304',
+        'integer_value' => 304,
+        'float_value' => 304.0,
+        'boolean_value' => true,
+        'array_value' => ['valid'],
+    ]);
+});
+
+it('rejects invalid definition cast input without exposing its value', function (
+    string $path,
+    mixed $value,
+): void {
+    config()->set('settings.definitions', [CastingSettingsDefinition::class]);
+    Setting::set("casting.{$path}", $value);
+
+    try {
+        Setting::get("casting.{$path}");
+    } catch (Throwable $exception) {
+        expect($exception)
+            ->toBeInstanceOf(InvalidSettingType::class)
+            ->and($exception->getMessage())->not->toContain('sensitive-invalid');
+
+        return;
+    }
+
+    $this->fail("Invalid definition cast [{$path}] did not throw an exception.");
+})->with([
+    'string' => ['string_value', 304],
+    'integer string' => ['integer_value', '304'],
+    'integer text' => ['integer_value', 'sensitive-invalid'],
+    'float string' => ['float_value', '304.5'],
+    'boolean' => ['boolean_value', 'sensitive-invalid'],
+    'array' => ['array_value', 'sensitive-invalid'],
+]);

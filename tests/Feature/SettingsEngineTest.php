@@ -46,6 +46,30 @@ it('updates a nested key without replacing its siblings', function (): void {
     ]);
 });
 
+it('bases nested mutations on the latest committed database root', function (): void {
+    Setting::set('general.social', [
+        'facebook' => 'old',
+        'github' => 'old',
+    ]);
+    Setting::get('general.social');
+
+    DB::table('settings')
+        ->where('scope', 'global')
+        ->where('group', 'general')
+        ->where('key', 'social')
+        ->update(['value' => json_encode([
+            'facebook' => 'old',
+            'github' => 'latest-committed',
+        ], JSON_THROW_ON_ERROR)]);
+
+    Setting::set('general.social.facebook', 'new');
+
+    expect(Setting::get('general.social'))->toBe([
+        'facebook' => 'new',
+        'github' => 'latest-committed',
+    ]);
+});
+
 it('reads a group from the database only once while cached', function (): void {
     Setting::setMany('general', ['site_name' => 'Nhwin', 'maintenance' => false]);
     Cache::flush();

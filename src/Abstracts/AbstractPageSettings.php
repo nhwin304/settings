@@ -92,17 +92,9 @@ abstract class AbstractPageSettings extends Page
             Setting::getGroup($this->settingName()),
         );
 
-        $definition = app(DefinitionRegistry::class)->get($this->settingName());
-
-        if ($definition !== null) {
-            foreach ($definition->encrypted() as $path) {
-                if (data_get($data, $path) !== null) {
-                    data_set($data, $path, '');
-                }
-            }
-        }
-
-        $this->data = $this->mutateFormDataBeforeFill($data);
+        $this->data = $this->sanitizeEncryptedFormData(
+            $this->mutateFormDataBeforeFill($data),
+        );
 
         $this->adapter()->fill($this->settingsForm(), $this->data);
         $this->callHook('afterFill');
@@ -132,9 +124,37 @@ abstract class AbstractPageSettings extends Page
         }
 
         $this->commitDatabaseTransaction();
-        $this->data = $data;
-        $this->rememberData();
+        try {
+            $this->callHook('afterCommit');
+        } finally {
+            $this->data = $this->sanitizeEncryptedFormData($data);
+            $this->adapter()->fill($form, $this->data);
+            $this->rememberData();
+        }
         $this->getSavedNotification()?->send();
+    }
+
+    protected function afterCommit(): void {}
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected function sanitizeEncryptedFormData(array $data): array
+    {
+        $definition = app(DefinitionRegistry::class)->get($this->settingName());
+
+        if ($definition === null) {
+            return $data;
+        }
+
+        foreach ($definition->encrypted() as $path) {
+            if (data_get($data, $path) !== null) {
+                data_set($data, $path, '');
+            }
+        }
+
+        return $data;
     }
 
     /** @param array<string, mixed> $data

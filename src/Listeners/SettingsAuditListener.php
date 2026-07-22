@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Nhwin\Settings\Listeners;
 
 use DateTimeImmutable;
+use Illuminate\Contracts\Config\Repository as Config;
+use InvalidArgumentException;
 use Nhwin\Settings\Contracts\SettingsAuditRecorder;
 use Nhwin\Settings\Events\SettingDeleted;
 use Nhwin\Settings\Events\SettingsGroupDeleted;
@@ -14,11 +16,18 @@ use Nhwin\Settings\Support\SettingsAuditEntry;
 
 final class SettingsAuditListener
 {
-    public function __construct(private SettingsAuditRecorder $recorder) {}
+    public function __construct(
+        private SettingsAuditRecorder $recorder,
+        private Config $config,
+    ) {}
 
     public function handle(
         SettingUpdated|SettingsGroupUpdated|SettingDeleted|SettingsGroupDeleted $event,
     ): void {
+        if (! $this->shouldRecord($event)) {
+            return;
+        }
+
         [$key, $action, $oldValue, $newValue] = match (true) {
             $event instanceof SettingUpdated => [
                 $event->key,
@@ -57,5 +66,23 @@ final class SettingsAuditListener
             newValue: $newValue,
             createdAt: new DateTimeImmutable,
         ));
+    }
+
+    private function shouldRecord(
+        SettingUpdated|SettingsGroupUpdated|SettingDeleted|SettingsGroupDeleted $event,
+    ): bool {
+        $granularity = $this->config->get('settings.audit.granularity', 'setting');
+
+        if (! is_string($granularity) || ! in_array($granularity, ['setting', 'group', 'both'], true)) {
+            throw new InvalidArgumentException(
+                'The settings.audit.granularity configuration must be setting, group, or both.',
+            );
+        }
+
+        return match ($granularity) {
+            'setting' => $event instanceof SettingUpdated || $event instanceof SettingDeleted,
+            'group' => $event instanceof SettingsGroupUpdated || $event instanceof SettingsGroupDeleted,
+            'both' => true,
+        };
     }
 }
